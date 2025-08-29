@@ -31,6 +31,7 @@ Route::prefix('user/chat')->name('user.chat.')->middleware(['auth'])->group(func
     Route::post('/send/{chatId}', [App\Http\Controllers\UserChatController::class, 'sendMessage'])->name('send');
     Route::get('/messages/{chatId}', [App\Http\Controllers\UserChatController::class, 'getMessages'])->name('messages');
     Route::delete('/messages/{messageId}', [App\Http\Controllers\UserChatController::class, 'deleteMessage'])->name('delete-message');
+    Route::post('/end/{chatId}', [App\Http\Controllers\UserChatController::class, 'endChat'])->name('end');
 });
 
 

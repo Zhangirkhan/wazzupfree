@@ -20,7 +20,7 @@
                 </div>
             </div>
             <h2 class="mt-4 text-center text-2xl font-bold tracking-tight text-gray-900">
-                Corporate Chat
+                Акжол Фарм
             </h2>
             <p class="mt-1 text-center text-sm text-gray-600">
                 Система корпоративного общения
@@ -72,31 +72,95 @@
                             <div class="w-full border-t border-gray-300"></div>
                         </div>
                         <div class="relative flex justify-center text-sm">
-                            <span class="px-2 bg-white text-gray-500">Тестовые данные</span>
+                            <span class="px-2 bg-white text-gray-500">Доступы к системе</span>
                         </div>
                     </div>
 
                     <div class="mt-4 bg-gray-50 rounded-lg p-3">
-                        <h3 class="text-sm font-medium text-gray-900 mb-2">Доступные аккаунты:</h3>
-                        <div class="space-y-1 text-xs text-gray-600">
-                            <div class="flex justify-between">
-                                <span>👨‍💼 Администратор:</span>
-                                <span class="font-mono">admin@testcompany.com</span>
+                        <h3 class="text-sm font-medium text-gray-900 mb-2">Пользователи по отделам:</h3>
+                        <div class="space-y-2 text-xs text-gray-600">
+                            <div class="border-b border-gray-200 pb-1">
+                                <div class="font-medium text-gray-700 mb-1">📊 Бухгалтерия</div>
+                                <div class="space-y-1 text-xs">
+                                    <div class="flex justify-between">
+                                        <span>userbuh:</span>
+                                        <span class="font-mono">userbuh@akzholpharm.kz</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>userbuh2:</span>
+                                        <span class="font-mono">userbuh2@akzholpharm.kz</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>userbuh3 (руководитель):</span>
+                                        <span class="font-mono">userbuh3@akzholpharm.kz</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="flex justify-between">
-                                <span>👨‍💻 Менеджер:</span>
-                                <span class="font-mono">manager@testcompany.com</span>
+                            
+                            <div class="border-b border-gray-200 pb-1">
+                                <div class="font-medium text-gray-700 mb-1">💻 IT отдел</div>
+                                <div class="space-y-1 text-xs">
+                                    <div class="flex justify-between">
+                                        <span>userit:</span>
+                                        <span class="font-mono">userit@akzholpharm.kz</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>userit2:</span>
+                                        <span class="font-mono">userit2@akzholpharm.kz</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>userit3 (руководитель):</span>
+                                        <span class="font-mono">userit3@akzholpharm.kz</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="flex justify-between">
-                                <span>👷 Сотрудник 1:</span>
-                                <span class="font-mono">employee1@testcompany.com</span>
+                            
+                            <div class="border-b border-gray-200 pb-1">
+                                <div class="font-medium text-gray-700 mb-1">👥 HR отдел</div>
+                                <div class="space-y-1 text-xs">
+                                    <div class="flex justify-between">
+                                        <span>userhr:</span>
+                                        <span class="font-mono">userhr@akzholpharm.kz</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>userhr2:</span>
+                                        <span class="font-mono">userhr2@akzholpharm.kz</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>userhr3 (руководитель):</span>
+                                        <span class="font-mono">userhr3@akzholpharm.kz</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="flex justify-between">
-                                <span>👷 Сотрудник 2:</span>
-                                <span class="font-mono">employee2@testcompany.com</span>
+                            
+                            <div class="border-b border-gray-200 pb-1">
+                                <div class="font-medium text-gray-700 mb-1">🏥 Вопросы по товарам</div>
+                                <div class="space-y-1 text-xs">
+                                    <div class="flex justify-between">
+                                        <span>userpro:</span>
+                                        <span class="font-mono">userpro@akzholpharm.kz</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>userpro2:</span>
+                                        <span class="font-mono">userpro2@akzholpharm.kz</span>
+                                    </div>
+                                    <div class="flex justify-between">
+                                        <span>userpro3 (руководитель):</span>
+                                        <span class="font-mono">userpro3@akzholpharm.kz</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="text-center text-gray-500 mt-1">
-                                <span class="font-mono">Пароль: password</span>
+                            
+                            <div class="border-b border-gray-200 pb-1">
+                                <div class="font-medium text-gray-700 mb-1">⚙️ Администрация</div>
+                                <div class="flex justify-between">
+                                    <span>Администратор:</span>
+                                    <span class="font-mono">admin@testcompany.com</span>
+                                </div>
+                            </div>
+                            
+                            <div class="text-center text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                                <span class="font-mono">Пароль для всех: password</span>
                             </div>
                         </div>
                     </div>
@@ -106,8 +170,8 @@
 
         <div class="mt-6 text-center">
             <div class="text-sm text-gray-500">
-                <p>© {{ date('Y') }} Corporate Chat System</p>
-                <p class="mt-1">Современная система корпоративного общения</p>
+                <p>© {{ date('Y') }} Акжол Фарм</p>
+                <p class="mt-1">Система корпоративного общения через WhatsApp</p>
             </div>
         </div>
     </div>

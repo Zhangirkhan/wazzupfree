@@ -222,15 +222,15 @@
                         <?php if(auth()->user()->hasPermission('chats')): ?>
                             <?php if (isset($component)) { $__componentOriginald6ac465da68ef29c651386dfc143c18b = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginald6ac465da68ef29c651386dfc143c18b = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.navigation.nav-item','data' => ['href' => ''.e(route('admin.chats.index', ['status' => 'active'])).'','active' => request()->routeIs('admin.chats.*'),'icon' => 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.navigation.nav-item','data' => ['href' => ''.e(route('admin.chats.index')).'','active' => request()->routeIs('admin.chats.*'),'icon' => 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('navigation.nav-item'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['href' => ''.e(route('admin.chats.index', ['status' => 'active'])).'','active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(request()->routeIs('admin.chats.*')),'icon' => 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z']); ?>
-                                Активные чаты
+<?php $component->withAttributes(['href' => ''.e(route('admin.chats.index')).'','active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(request()->routeIs('admin.chats.*')),'icon' => 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z']); ?>
+                                Чаты
                              <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginald6ac465da68ef29c651386dfc143c18b)): ?>
@@ -293,9 +293,8 @@
 <?php endif; ?>
                     <?php endif; ?>
 
-                    <!-- Чат для обычных пользователей -->
-                    <?php if(auth()->user()->role !== 'admin'): ?>
-                        <?php if (isset($component)) { $__componentOriginald6ac465da68ef29c651386dfc143c18b = $component; } ?>
+                    <!-- Чат для всех пользователей -->
+                    <?php if (isset($component)) { $__componentOriginald6ac465da68ef29c651386dfc143c18b = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginald6ac465da68ef29c651386dfc143c18b = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.navigation.nav-item','data' => ['href' => ''.e(route('user.chat.index')).'','active' => request()->routeIs('user.chat.*'),'icon' => 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('navigation.nav-item'); ?>
@@ -305,8 +304,8 @@
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
 <?php $component->withAttributes(['href' => ''.e(route('user.chat.index')).'','active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(request()->routeIs('user.chat.*')),'icon' => 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z']); ?>
-                            Чат
-                         <?php echo $__env->renderComponent(); ?>
+                        Чат
+                     <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
 <?php if (isset($__attributesOriginald6ac465da68ef29c651386dfc143c18b)): ?>
 <?php $attributes = $__attributesOriginald6ac465da68ef29c651386dfc143c18b; ?>
@@ -316,7 +315,6 @@
 <?php $component = $__componentOriginald6ac465da68ef29c651386dfc143c18b; ?>
 <?php unset($__componentOriginald6ac465da68ef29c651386dfc143c18b); ?>
 <?php endif; ?>
-                    <?php endif; ?>
 
 
                 </ul>

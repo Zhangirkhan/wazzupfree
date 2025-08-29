@@ -144,11 +144,11 @@
 
                         @if(auth()->user()->hasPermission('chats'))
                             <x-navigation.nav-item 
-                                href="{{ route('admin.chats.index', ['status' => 'active']) }}" 
+                                href="{{ route('admin.chats.index') }}" 
                                 :active="request()->routeIs('admin.chats.*')"
                                 icon="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                             >
-                                Активные чаты
+                                Чаты
                             </x-navigation.nav-item>
                         @endif
 
@@ -174,16 +174,14 @@
                         </x-navigation.nav-item>
                     @endif
 
-                    <!-- Чат для обычных пользователей -->
-                    @if(auth()->user()->role !== 'admin')
-                        <x-navigation.nav-item 
-                            href="{{ route('user.chat.index') }}" 
-                            :active="request()->routeIs('user.chat.*')"
-                            icon="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                        >
-                            Чат
-                        </x-navigation.nav-item>
-                    @endif
+                    <!-- Чат для всех пользователей -->
+                    <x-navigation.nav-item 
+                        href="{{ route('user.chat.index') }}" 
+                        :active="request()->routeIs('user.chat.*')"
+                        icon="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    >
+                        Чат
+                    </x-navigation.nav-item>
 
 
                 </ul>

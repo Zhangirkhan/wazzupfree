@@ -37,14 +37,21 @@ class ChatController extends Controller
         // Фильтр по статусу
         if ($request->filled('status')) {
             $query->where('status', $request->status);
-        } else {
-            // По умолчанию показываем только активные чаты для администраторов
-            $query->where('status', 'active');
         }
+        // По умолчанию показываем все чаты для администраторов
 
         // Фильтр по типу
         if ($request->filled('type')) {
             $query->where('type', $request->type);
+        }
+
+        // Фильтр по мессенджер чатам
+        if ($request->filled('messenger')) {
+            if ($request->messenger === 'true') {
+                $query->where('is_messenger_chat', true);
+            } else {
+                $query->where('is_messenger_chat', false);
+            }
         }
 
         // Фильтр по организации
@@ -86,6 +93,9 @@ class ChatController extends Controller
             'transferred' => Chat::where('status', 'transferred')->count(),
             'pending' => Chat::where('status', 'pending')->count(),
             'rejected' => Chat::where('status', 'rejected')->count(),
+            'messenger' => Chat::where('is_messenger_chat', true)->count(),
+            'messenger_active' => Chat::where('is_messenger_chat', true)->where('status', 'active')->count(),
+            'messenger_completed' => Chat::where('is_messenger_chat', true)->where('status', 'completed')->count(),
         ];
 
         // Данные для фильтров

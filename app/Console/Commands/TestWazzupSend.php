@@ -3,70 +3,43 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\Chat;
-use App\Models\User;
-use App\Services\MessengerService;
+use App\Services\Wazzup24Service;
 
 class TestWazzupSend extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'test:wazzup-send {message}';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
+    protected $signature = 'test:wazzup-send';
     protected $description = 'Тестирование отправки сообщения через Wazzup24';
 
-    /**
-     * Execute the console command.
-     */
     public function handle()
     {
-        $message = $this->argument('message');
-        
         $this->info('Тестирование отправки сообщения через Wazzup24...');
-        $this->info("Сообщение: {$message}");
+
+        $wazzupService = app('\App\Services\Wazzup24Service');
         
-        // Получаем чат с ID 1
-        $chat = Chat::find(1);
-        if (!$chat) {
-            $this->error('Чат с ID 1 не найден');
-            return 1;
-        }
+        $channelId = config('services.wazzup24.channel_id');
+        $chatType = 'whatsapp';
+        $chatId = '77476644108';
+        $text = 'Тестовое сообщение из системы!';
         
-        $this->info("Чат найден: {$chat->title}");
-        $this->info("Wazzup Chat ID: {$chat->wazzup_chat_id}");
-        $this->info("Телефон: {$chat->messenger_phone}");
-        
-        // Получаем пользователя
-        $user = User::find(1);
-        if (!$user) {
-            $this->error('Пользователь с ID 1 не найден');
-            return 1;
-        }
-        
-        $this->info("Пользователь: {$user->name}");
+        $this->info("Channel ID: {$channelId}");
+        $this->info("Chat Type: {$chatType}");
+        $this->info("Chat ID: {$chatId}");
+        $this->info("Text: {$text}");
         
         try {
-            // Отправляем сообщение через MessengerService
-            $messengerService = app(MessengerService::class);
-            $messengerService->sendManagerMessage($chat, $message, $user);
+            $result = $wazzupService->sendMessage($channelId, $chatType, $chatId, $text);
             
-            $this->info('Сообщение отправлено успешно!');
-            $this->info('Проверьте WhatsApp клиента.');
-            
+            if ($result['success']) {
+                $this->info('✅ Сообщение отправлено успешно!');
+                $this->info('Message ID: ' . ($result['message_id'] ?? 'N/A'));
+                $this->info('Response: ' . json_encode($result['data'] ?? [], JSON_PRETTY_PRINT));
+            } else {
+                $this->error('❌ Ошибка отправки: ' . ($result['error'] ?? 'Unknown error'));
+            }
         } catch (\Exception $e) {
-            $this->error('Ошибка отправки: ' . $e->getMessage());
-            $this->error('Trace: ' . $e->getTraceAsString());
-            return 1;
+            $this->error('❌ Исключение: ' . $e->getMessage());
         }
         
-        return 0;
+        $this->info('Тестирование завершено.');
     }
 }

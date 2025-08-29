@@ -78,14 +78,14 @@ class Wazzup24Service
                 'text' => $cleanText
             ];
 
-            // Добавляем опциональные параметры
-            if ($crmUserId) {
-                $data['crmUserId'] = $crmUserId;
-            }
-            
-            if ($crmMessageId) {
-                $data['crmMessageId'] = $crmMessageId;
-            }
+            // Убираем crmUserId и crmMessageId, так как они вызывают ошибку INVALID_MESSAGE_DATA
+            // if ($crmUserId) {
+            //     $data['crmUserId'] = $crmUserId;
+            // }
+            // 
+            // if ($crmMessageId) {
+            //     $data['crmMessageId'] = $crmMessageId;
+            // }
 
             $response = $this->makeRequest('POST', '/v3/message', $data);
             
@@ -165,9 +165,7 @@ class Wazzup24Service
         
         Log::info('Wazzup24 API request', [
             'method' => $method,
-            'url' => $url,
-            'headers' => $headers,
-            'data' => $data
+            'endpoint' => $endpoint
         ]);
         
         $request = Http::withHeaders($headers);
@@ -194,10 +192,9 @@ class Wazzup24Service
 
         if ($response->successful()) {
             $responseData = $response->json();
-            Log::info('Wazzup24 API response', [
-                'status' => $response->status(),
-                'data' => $responseData
-            ]);
+                    Log::info('Wazzup24 API response', [
+            'status' => $response->status()
+        ]);
             return $responseData;
         } else {
             $errorMessage = 'HTTP ' . $response->status() . ': ' . $response->body();
@@ -215,8 +212,8 @@ class Wazzup24Service
      */
     private function cleanText($text)
     {
-        // Удаляем управляющие символы
-        $text = preg_replace('/[\x00-\x1F\x7F]/', '', $text);
+        // Удаляем управляющие символы, но сохраняем переносы строк (\n, \r)
+        $text = preg_replace('/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/', '', $text);
         
         // Удаляем символы замены UTF-8
         $text = str_replace("\u{FFFD}", '', $text);

@@ -335,7 +335,7 @@ class WebhookController extends Controller
             'contact_name' => $contactName
         ]);
         
-        if (!$phone || !$text) {
+        if (!$phone || $text === null || $text === '') {
             Log::error('Invalid message data - missing phone or text', [
                 'phone' => $phone,
                 'text' => $text
@@ -392,7 +392,7 @@ class WebhookController extends Controller
             'full_data' => $messageData
         ]);
 
-        if (!$phone || !$text) {
+        if (!$phone || $text === null || $text === '') {
             Log::error('Invalid message data - missing phone or text', [
                 'phone' => $phone,
                 'text' => $text,

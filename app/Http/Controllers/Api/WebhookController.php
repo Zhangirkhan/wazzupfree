@@ -17,7 +17,7 @@ class WebhookController extends Controller
     public function handle(Request $request)
     {
         try {
-            Log::info('Wazzup24 webhook received', $request->all());
+            Log::info('Webhook received', ['type' => 'wazzup24']);
 
             // Получаем данные из webhook
             $data = $request->all();
@@ -76,23 +76,19 @@ class WebhookController extends Controller
                 return;
             }
 
-            // Логируем данные перед отправкой в MessengerService
-            Log::info('Sending to MessengerService', [
+            // Логируем краткую информацию
+            Log::info('Processing message', [
                 'chatId' => $chatId,
-                'text' => $text,
-                'contact' => $contact,
-                'contact_type' => gettype($contact)
+                'text' => substr($text, 0, 50) . (strlen($text) > 50 ? '...' : '')
             ]);
 
             // Используем MessengerService для обработки сообщения
             $messengerService = app('\App\Services\MessengerService');
             $result = $messengerService->handleIncomingMessage($chatId, $text, $contact);
 
-            Log::info('Wazzup24 message processed successfully', [
+            Log::info('Message processed', [
                 'chat_id' => $result['chat_id'] ?? null,
-                'message_id' => $result['message_id'] ?? null,
-                'chat_id_wazzup' => $chatId,
-                'contact' => $contact
+                'success' => $result['success'] ?? false
             ]);
 
         } catch (\Exception $e) {

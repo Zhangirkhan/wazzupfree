@@ -23,33 +23,25 @@ class MessengerService
     public function handleIncomingMessage($phone, $message, $contactData = null)
     {
         try {
-            Log::info('=== MESSENGER SERVICE: Processing message ===', [
-                'phone' => $phone,
-                'message' => $message,
-                'contact' => $contactData,
-                'contact_type' => gettype($contactData)
-            ]);
+                    Log::info('Processing message', [
+            'phone' => $phone,
+            'message_length' => strlen($message)
+        ]);
             
             // Находим или создаем клиента с контактами
             $client = $this->findOrCreateClient($phone, $contactData);
-            Log::info('Client found/created:', ['client_id' => $client->id, 'name' => $client->name]);
+            Log::info('Client found', ['client_id' => $client->id]);
             
             // Находим или создаем чат
             $chat = $this->findOrCreateMessengerChat($phone, $client);
             $isNewChat = $chat->wasRecentlyCreated;
-            Log::info('Chat found/created:', [
+            Log::info('Chat found', [
                 'chat_id' => $chat->id, 
-                'status' => $chat->messenger_status,
-                'is_new' => $isNewChat
+                'status' => $chat->messenger_status
             ]);
             
             // Обрабатываем сообщение в зависимости от статуса
             $this->processMessage($chat, $message, $client);
-            
-            // Если это новый чат, отправляем меню
-            if ($isNewChat) {
-                $this->handleMenuMessage($chat, $message, $client);
-            }
             
             return [
                 'success' => true,
@@ -80,9 +72,15 @@ class MessengerService
         // Сохраняем каждое входящее сообщение клиента
         $this->saveClientMessage($chat, $message, $client);
         
+        // Если это новый чат, отправляем меню только один раз
+        if ($chat->wasRecentlyCreated) {
+            $this->sendInitialMenu($chat, $client);
+            return;
+        }
+        
         switch ($chat->messenger_status) {
             case 'menu':
-                return $this->handleMenuMessage($chat, $message, $client);
+                return $this->handleMenuSelection($chat, $message, $client);
             
             case 'department_selected':
                 return $this->handleDepartmentSelection($chat, $message, $client);
@@ -99,26 +97,38 @@ class MessengerService
     }
 
     /**
-     * Обработка сообщения в главном меню
+     * Отправка начального меню (только один раз)
      */
-    protected function handleMenuMessage($chat, $message, $client)
+    protected function sendInitialMenu($chat, $client)
     {
-        // Специальная обработка для тестового номера
-        if ($chat->messenger_phone === '77476644108') {
-            $this->handleTestNumberMenu($chat, $message, $client);
+        // Специальная обработка для тестовых номеров
+        if ($this->isTestNumber($chat->messenger_phone)) {
+            $menuText = $this->generateTestMenuText();
+        } else {
+            $departments = Department::orderBy('name')->get();
+            $menuText = $this->generateMenuText($departments);
+        }
+        
+        // Отправляем меню
+        $this->sendMessage($chat, $menuText);
+        
+        // Обновляем статус на ожидание выбора
+        $chat->update(['messenger_status' => 'menu']);
+    }
+
+    /**
+     * Обработка выбора пункта меню
+     */
+    protected function handleMenuSelection($chat, $message, $client)
+    {
+        // Специальная обработка для тестовых номеров
+        if ($this->isTestNumber($chat->messenger_phone)) {
+            $this->handleTestNumberSelection($chat, $message, $client);
             return;
         }
         
-        $departments = Department::orderBy('name')->get();
-        $menuText = $this->generateMenuText($departments);
-        
-        if (in_array($message, ['1', '2', '3', '4', '0'])) {
-            if ($message === '0') {
-                $this->sendMessage($chat, "До свидания! Обращайтесь снова.");
-                $chat->update(['messenger_status' => 'completed']);
-                return;
-            }
-            
+        // Обрабатываем выбор отдела
+        if (in_array($message, ['1', '2', '3', '4'])) {
             $department = Department::find($message);
             if ($department) {
                 $chat->update([
@@ -131,24 +141,23 @@ class MessengerService
             }
         }
         
-        // Если сообщение не распознано, показываем меню
-        $this->sendMessage($chat, $menuText);
+        // Обрабатываем "0" - сброс к меню
+        if ($message === '0') {
+            $this->resetToMenu($chat, $client);
+            return;
+        }
+        
+        // Если сообщение не распознано, отправляем подсказку
+        $this->sendMessage($chat, "Пожалуйста, выберите номер отдела (1, 2, 3, 4).");
     }
 
     /**
-     * Обработка меню для тестового номера
+     * Обработка выбора для тестового номера
      */
-    protected function handleTestNumberMenu($chat, $message, $client)
+    protected function handleTestNumberSelection($chat, $message, $client)
     {
-        $menuText = "Добрый день. Это Акжол Фарм.\n\nЧто вас интересует:\n1. Бухгалтерия\n2. IT отдел\n3. HR отдел\n4. Вопросы по товарам в аптеке\n\n0. Выход";
-        
-        if (in_array($message, ['1', '2', '3', '4', '0'])) {
-            if ($message === '0') {
-                $this->sendMessage($chat, "До свидания! Обращайтесь снова.");
-                $chat->update(['messenger_status' => 'completed']);
-                return;
-            }
-            
+        // Обрабатываем выбор отдела
+        if (in_array($message, ['1', '2', '3', '4'])) {
             $departments = [
                 '1' => ['name' => 'Бухгалтерия', 'id' => 1],
                 '2' => ['name' => 'IT отдел', 'id' => 2], 
@@ -168,8 +177,14 @@ class MessengerService
             }
         }
         
-        // Если сообщение не распознано, показываем меню
-        $this->sendMessage($chat, $menuText);
+        // Обрабатываем "0" - сброс к меню
+        if ($message === '0') {
+            $this->resetToMenu($chat, $client);
+            return;
+        }
+        
+        // Если сообщение не распознано, отправляем подсказку
+        $this->sendMessage($chat, "Пожалуйста, выберите номер отдела (1, 2, 3, 4).");
     }
 
     /**
@@ -189,9 +204,6 @@ class MessengerService
             'last_activity_at' => now()
         ]);
         
-        // Сохраняем сообщение клиента
-        $this->saveClientMessage($chat, $message, $client);
-        
         // Уведомляем отдел
         $this->notifyDepartment($chat, $message);
         
@@ -203,9 +215,6 @@ class MessengerService
      */
     protected function handleActiveChat($chat, $message, $client)
     {
-        // Сохраняем сообщение клиента
-        $this->saveClientMessage($chat, $message, $client);
-        
         // Обновляем время активности
         $chat->update(['last_activity_at' => now()]);
         
@@ -224,14 +233,20 @@ class MessengerService
     protected function handleCompletedChat($chat, $message, $client)
     {
         if ($message === '1') {
-            // Продолжить чат с тем же менеджером
-            $chat->update(['messenger_status' => 'active']);
-            $this->sendMessage($chat, "Чат продолжен. Можете задать новый вопрос.");
+            // Продолжить чат с тем же менеджером (обход меню и отделов)
+            if ($chat->assigned_to) {
+                $chat->update(['messenger_status' => 'active']);
+                $this->sendMessage($chat, "Чат продолжен с тем же менеджером. Можете задать новый вопрос.");
+            } else {
+                // Если нет назначенного менеджера, возвращаемся в меню
+                $this->sendMessage($chat, "К сожалению, предыдущий менеджер недоступен. Выберите отдел заново.");
+                $this->resetToMenu($chat, $client);
+            }
         } elseif ($message === '0') {
-            // Вернуться в главное меню
+            // Сбросить менеджера и отдел, показать меню заново
             $this->resetToMenu($chat, $client);
         } else {
-            $this->sendMessage($chat, "1 - Продолжить чат\n0 - Вернуться в главное меню");
+            $this->sendMessage($chat, "1 - Продолжить чат с тем же менеджером\n0 - Вернуться в главное меню");
         }
     }
 
@@ -248,15 +263,8 @@ class MessengerService
             'assigned_to' => null
         ]);
         
-        // Специальная обработка для тестового номера
-        if ($chat->messenger_phone === '77476644108') {
-            $menuText = $this->generateTestMenuText();
-        } else {
-            $departments = Department::orderBy('name')->get();
-            $menuText = $this->generateMenuText($departments);
-        }
-        
-        $this->sendMessage($chat, $menuText);
+        // Отправляем меню заново при сбросе
+        $this->sendInitialMenu($chat, $client);
     }
 
     /**
@@ -270,9 +278,22 @@ class MessengerService
             $text .= "{$department->id}. {$department->name}\n";
         }
         
-        $text .= "\n0. Выход";
-        
         return $text;
+    }
+
+    /**
+     * Проверка, является ли номер тестовым
+     */
+    protected function isTestNumber($phone)
+    {
+        $testNumbers = [
+            '77476644108',  // Оригинальный тестовый номер
+            '77079500929',  // +7 707 950 0929
+            '77028200002',  // +7 702 820 0002
+            '77777895444'   // +7 777 789 5444
+        ];
+        
+        return in_array($phone, $testNumbers);
     }
 
     /**
@@ -280,7 +301,7 @@ class MessengerService
      */
     protected function generateTestMenuText()
     {
-        return "Добрый день. Это Акжол Фарм.\n\nЧто вас интересует:\n\n1. Бухгалтерия\n2. IT отдел\n3. HR отдел\n4. Вопросы по товарам в аптеке\n\n0. Выход";
+        return "Добрый день. Это Акжол Фарм.\n\nЧто вас интересует (пришлите номер выбранного пункта):\n\n1. Бухгалтерия\n2. IT отдел\n3. HR отдел\n4. Вопросы по товарам в аптеке";
     }
 
     /**
@@ -306,20 +327,73 @@ class MessengerService
      */
     protected function sendMessage($chat, $message)
     {
-        // Сохраняем в базу
-        Message::create([
-            'chat_id' => $chat->id,
-            'user_id' => 1, // Системный пользователь
-            'content' => $message,
-            'type' => 'system',
-            'metadata' => [
-                'direction' => 'outgoing',
-                'is_bot_message' => true
-            ]
-        ]);
-        
-        // Сообщение сохранено только локально
-        Log::info("Системное сообщение сохранено локально в чате {$chat->id}");
+        try {
+            // Сохраняем в базу
+            $messageRecord = Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => 1, // Системный пользователь
+                'content' => $message,
+                'type' => 'system',
+                'metadata' => [
+                    'direction' => 'outgoing',
+                    'is_bot_message' => true
+                ]
+            ]);
+            
+            Log::info("System message saved", ['chat_id' => $chat->id]);
+            
+            // Отправляем системное сообщение через Wazzup24
+            if (class_exists('\App\Services\Wazzup24Service')) {
+                $wazzupService = app('\App\Services\Wazzup24Service');
+                
+                // Получаем данные для отправки
+                $channelId = config('services.wazzup24.channel_id');
+                $chatType = 'whatsapp';
+                $chatId = $chat->messenger_phone;
+                
+                $result = $wazzupService->sendMessage(
+                    $channelId,
+                    $chatType,
+                    $chatId,
+                    $message,
+                    1, // Системный пользователь
+                    $messageRecord->id
+                );
+                
+                if ($result['success']) {
+                    // Обновляем сообщение с ID от Wazzup24
+                    $messageRecord->update([
+                        'wazzup_message_id' => $result['message_id'] ?? null,
+                        'metadata' => array_merge($messageRecord->metadata ?? [], [
+                            'wazzup_sent' => true,
+                            'wazzup_message_id' => $result['message_id'] ?? null
+                        ])
+                    ]);
+                    
+                    Log::info("System message sent via Wazzup24", [
+                        'chat_id' => $chat->id,
+                        'wazzup_id' => $result['message_id'] ?? null
+                    ]);
+                } else {
+                    Log::error("Ошибка отправки системного сообщения через Wazzup24", [
+                        'chat_id' => $chat->id,
+                        'message_id' => $messageRecord->id,
+                        'error' => $result['error'] ?? 'Unknown error'
+                    ]);
+                }
+            } else {
+                Log::warning("Wazzup24Service не найден, системное сообщение сохранено только локально", [
+                    'chat_id' => $chat->id,
+                    'message_id' => $messageRecord->id
+                ]);
+            }
+            
+        } catch (\Exception $e) {
+            Log::error("Ошибка в sendMessage: " . $e->getMessage(), [
+                'chat_id' => $chat->id,
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
     }
 
     /**
@@ -327,30 +401,103 @@ class MessengerService
      */
     public function sendManagerMessage($chat, $message, $manager)
     {
-        // Просто сохраняем сообщение в локальную базу данных
-        $messageRecord = Message::create([
-            'chat_id' => $chat->id,
-            'user_id' => $manager->id,
-            'content' => $message,
-            'type' => 'text',
-            'direction' => 'out',
-            'metadata' => [
-                'direction' => 'outgoing',
-                'is_manager_message' => true,
-                'manager_name' => $manager->name
-            ]
-        ]);
-        
-        // Обновляем время активности чата
-        $chat->update(['last_activity_at' => now()]);
-        
-        Log::info("Сообщение менеджера сохранено локально", [
-            'chat_id' => $chat->id,
-            'message_id' => $messageRecord->id,
-            'manager' => $manager->name
-        ]);
-        
-        return $messageRecord;
+        try {
+            // Автоматически назначаем чат сотруднику, если он еще не назначен
+            if (!$chat->assigned_to) {
+                $chat->update([
+                    'assigned_to' => $manager->id,
+                    'last_activity_at' => now()
+                ]);
+                
+                Log::info("Chat auto-assigned to manager", [
+                    'chat_id' => $chat->id,
+                    'manager_id' => $manager->id,
+                    'manager_name' => $manager->name
+                ]);
+            } else {
+                // Обновляем только время активности
+                $chat->update(['last_activity_at' => now()]);
+            }
+            
+            // Формируем сообщение с именем сотрудника жирным шрифтом
+            $formattedMessage = "**{$manager->name}**\n{$message}";
+            
+            // Сначала сохраняем сообщение в локальную базу данных
+            $messageRecord = Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => $manager->id,
+                'content' => $formattedMessage, // Сохраняем отформатированное сообщение
+                'type' => 'text',
+                'direction' => 'out',
+                'metadata' => [
+                    'direction' => 'outgoing',
+                    'is_manager_message' => true,
+                    'manager_name' => $manager->name,
+                    'original_message' => $message // Сохраняем оригинальное сообщение
+                ]
+            ]);
+            
+            Log::info("Manager message saved", [
+                'chat_id' => $chat->id,
+                'message_id' => $messageRecord->id
+            ]);
+            
+            // Отправляем сообщение через Wazzup24
+            if (class_exists('\App\Services\Wazzup24Service')) {
+                $wazzupService = app('\App\Services\Wazzup24Service');
+                
+                // Получаем данные для отправки
+                $channelId = config('services.wazzup24.channel_id');
+                $chatType = 'whatsapp';
+                $chatId = $chat->messenger_phone;
+                
+                $result = $wazzupService->sendMessage(
+                    $channelId,
+                    $chatType,
+                    $chatId,
+                    $formattedMessage, // Отправляем отформатированное сообщение
+                    $manager->id,
+                    $messageRecord->id
+                );
+                
+                if ($result['success']) {
+                    // Обновляем сообщение с ID от Wazzup24
+                    $messageRecord->update([
+                        'wazzup_message_id' => $result['message_id'] ?? null,
+                        'metadata' => array_merge($messageRecord->metadata ?? [], [
+                            'wazzup_sent' => true,
+                            'wazzup_message_id' => $result['message_id'] ?? null
+                        ])
+                    ]);
+                    
+                    Log::info("Message sent via Wazzup24", [
+                        'chat_id' => $chat->id,
+                        'wazzup_id' => $result['message_id'] ?? null
+                    ]);
+                } else {
+                    Log::error("Wazzup24 send error", [
+                        'chat_id' => $chat->id,
+                        'error' => $result['error'] ?? 'Unknown error'
+                    ]);
+                }
+            } else {
+                Log::warning("Wazzup24Service не найден, сообщение сохранено только локально", [
+                    'chat_id' => $chat->id,
+                    'message_id' => $messageRecord->id
+                ]);
+            }
+            
+            return $messageRecord;
+            
+        } catch (\Exception $e) {
+            Log::error("Ошибка в sendManagerMessage: " . $e->getMessage(), [
+                'chat_id' => $chat->id,
+                'manager' => $manager->name,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            throw $e;
+        }
     }
 
     /**
@@ -359,7 +506,18 @@ class MessengerService
     protected function notifyDepartment($chat, $message)
     {
         $department = $chat->department;
+        
+        if (!$department) {
+            Log::warning("Отдел не найден для чата {$chat->id}");
+            return;
+        }
+        
         $users = $department->users;
+        
+        if ($users->isEmpty()) {
+            Log::warning("В отделе {$department->name} нет пользователей для уведомления");
+            return;
+        }
         
         foreach ($users as $user) {
             // Здесь можно добавить уведомления (email, push, etc.)
@@ -393,12 +551,9 @@ class MessengerService
                 'avatar' => $contactData['avatarUri'] ?? $contactData['avatar'] ?? null
             ]);
             
-            Log::info('Создан новый клиент с контактами', [
+            Log::info('Client created', [
                 'client_id' => $client->id,
-                'name' => $client->name,
-                'phone' => $client->phone,
-                'avatar' => $client->avatar,
-                'contact_data' => $contactData
+                'name' => $client->name
             ]);
         } else {
             // Обновляем данные клиента если они изменились

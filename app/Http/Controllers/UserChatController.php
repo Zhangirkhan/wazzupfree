@@ -25,6 +25,19 @@ class UserChatController extends Controller
             }, 'department', 'assignedTo'])
             ->orderBy('last_activity_at', 'desc');
 
+        // Если пользователь не админ, показываем чаты по новой логике
+        if ($user->role !== 'admin') {
+            $query->where('department_id', $user->department_id);
+            
+            // Если пользователь не руководитель, показываем только назначенные ему чаты
+            if (!$this->isManager($user)) {
+                $query->where(function($q) use ($user) {
+                    $q->where('assigned_to', $user->id)
+                      ->orWhereNull('assigned_to'); // Неприсвоенные чаты
+                });
+            }
+        }
+
         // Поиск по названию, телефону или описанию
         if ($request->filled('search')) {
             $search = $request->search;
@@ -108,6 +121,10 @@ class UserChatController extends Controller
             ->find($chatId);
 
             if ($chat) {
+                // Проверяем доступ к чату
+                if ($user->role !== 'admin' && $chat->department_id !== $user->department_id) {
+                    abort(403, 'Доступ запрещен. Этот чат не принадлежит вашему отделу.');
+                }
                 // Находим клиента по номеру телефона
                 $client = Client::where('phone', $chat->messenger_phone)->first();
 
@@ -140,6 +157,10 @@ class UserChatController extends Controller
                         $isFromClient = true;
                         $senderName = $message->metadata['client_name'] ?? 'Клиент';
                         $senderAvatar = 'К';
+                    } elseif ($message->metadata && isset($message->metadata['manager_name'])) {
+                        // Для сообщений от менеджера используем его имя
+                        $senderName = $message->metadata['manager_name'];
+                        $senderAvatar = 'М';
                     } elseif ($message->type === 'system' || ($message->metadata && isset($message->metadata['is_bot_message']))) {
                         $senderName = 'Система';
                         $senderAvatar = 'С';
@@ -148,9 +169,15 @@ class UserChatController extends Controller
                         $senderAvatar = strtoupper(substr($message->user->name, 0, 1));
                     }
 
+                    // Для сообщений от менеджера используем оригинальное сообщение без **Имя**
+                    $content = $this->cleanForJson($message->content);
+                    if ($message->metadata && isset($message->metadata['manager_name']) && isset($message->metadata['original_message'])) {
+                        $content = $this->cleanForJson($message->metadata['original_message']);
+                    }
+
                     return [
                         'id' => $message->id,
-                        'content' => $message->content,
+                        'content' => $content,
                         'created_at' => $message->created_at,
                         'is_from_client' => $isFromClient,
                         'sender_name' => $senderName,
@@ -170,9 +197,10 @@ class UserChatController extends Controller
      */
     public function search(Request $request)
     {
+        $user = Auth::user();
         $search = $request->input('search', '');
         
-        $chats = Chat::query()
+        $query = Chat::query()
             ->where('is_messenger_chat', true)
             ->with(['messages' => function($query) {
                 $query->latest()->limit(1);
@@ -181,9 +209,22 @@ class UserChatController extends Controller
                 $q->where('title', 'like', '%' . $search . '%')
                   ->orWhere('messenger_phone', 'like', '%' . $search . '%')
                   ->orWhere('description', 'like', '%' . $search . '%');
-            })
-            ->orderBy('last_activity_at', 'desc')
-            ->get();
+            });
+
+        // Если пользователь не админ, показываем чаты по новой логике
+        if ($user->role !== 'admin') {
+            $query->where('department_id', $user->department_id);
+            
+            // Если пользователь не руководитель, показываем только назначенные ему чаты
+            if (!$this->isManager($user)) {
+                $query->where(function($q) use ($user) {
+                    $q->where('assigned_to', $user->id)
+                      ->orWhereNull('assigned_to'); // Неприсвоенные чаты
+                });
+            }
+        }
+
+        $chats = $query->orderBy('last_activity_at', 'desc')->get();
 
         $chatsData = $chats->map(function($chat) {
             $lastMessage = $chat->messages->first();
@@ -315,11 +356,22 @@ class UserChatController extends Controller
     public function getMessages(Request $request, $chatId)
     {
         try {
+            $user = Auth::user();
             $lastMessageId = $request->get('last_message_id');
             \Log::info('getMessages вызван', ['chatId' => $chatId, 'lastMessageId' => $lastMessageId]);
             
             $chat = Chat::where('is_messenger_chat', true)->findOrFail($chatId);
             \Log::info('Чат найден', ['chat_id' => $chat->id, 'title' => $chat->title]);
+
+            // Проверяем доступ к чату
+            if ($user->role !== 'admin' && $chat->department_id !== $user->department_id) {
+                abort(403, 'Доступ запрещен. Этот чат не принадлежит вашему отделу.');
+            }
+            
+            // Если пользователь не руководитель, проверяем назначение
+            if ($user->role !== 'admin' && !$this->isManager($user) && $chat->assigned_to !== $user->id) {
+                abort(403, 'Доступ запрещен. Этот чат не назначен вам.');
+            }
         
             $query = $chat->messages()->orderBy('created_at', 'asc');
             
@@ -334,21 +386,42 @@ class UserChatController extends Controller
             
             $formattedMessages = $messages->map(function ($message) {
                 $isFromClient = false;
+                $senderName = 'Система';
                 
                 // Простая проверка metadata
                 if ($message->metadata) {
                     if (isset($message->metadata['direction']) && $message->metadata['direction'] === 'incoming') {
                         $isFromClient = true;
+                        $senderName = 'Клиент';
+                    } elseif (isset($message->metadata['manager_name'])) {
+                        // Для сообщений от менеджера используем его имя
+                        $senderName = $message->metadata['manager_name'];
                     }
+                }
+                
+                // Для сообщений от менеджера убираем **Имя** из содержимого
+                $cleanedContent = $this->cleanForJson($message->content);
+                if ($message->metadata && isset($message->metadata['manager_name']) && isset($message->metadata['original_message'])) {
+                    // Используем оригинальное сообщение без **Имя**
+                    $cleanedContent = $this->cleanForJson($message->metadata['original_message']);
+                }
+                
+                // Логируем системные сообщения для отладки
+                if (!$isFromClient) {
+                    \Log::info('Системное сообщение для JSON:', [
+                        'original' => $message->content,
+                        'cleaned' => $cleanedContent,
+                        'length' => strlen($cleanedContent)
+                    ]);
                 }
                 
                 return [
                     'id' => $message->id,
-                    'content' => $message->content,
+                    'content' => $cleanedContent,
                     'created_at' => $message->created_at,
                     'is_from_client' => $isFromClient,
-                    'sender_name' => $isFromClient ? 'Клиент' : 'Система',
-                    'sender_avatar' => $isFromClient ? 'К' : 'С',
+                    'sender_name' => $senderName,
+                    'sender_avatar' => $isFromClient ? 'К' : 'М',
                     'type' => $message->type,
                     'user_id' => $message->user_id
                 ];
@@ -383,7 +456,7 @@ class UserChatController extends Controller
         try {
             // Очищаем текст от некорректных UTF-8 символов
             $cleanContent = mb_convert_encoding($request->content, 'UTF-8', 'UTF-8');
-            $cleanContent = preg_replace('/[\x00-\x1F\x7F]/', '', $cleanContent); // Удаляем управляющие символы
+            $cleanContent = preg_replace('/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/', '', $cleanContent); // Удаляем управляющие символы, но сохраняем переносы строк
             
             \Log::info('sendMessage вызван', ['chatId' => $chatId, 'content' => $cleanContent]);
             
@@ -401,25 +474,38 @@ class UserChatController extends Controller
             
             \Log::info('Чат и пользователь найдены', ['chat_id' => $chat->id, 'user_id' => $user->id]);
 
+            // Проверяем доступ к чату
+            if ($user->role !== 'admin' && $chat->department_id !== $user->department_id) {
+                abort(403, 'Доступ запрещен. Этот чат не принадлежит вашему отделу.');
+            }
+            
+            // Если пользователь не руководитель, проверяем назначение
+            if ($user->role !== 'admin' && !$this->isManager($user) && $chat->assigned_to !== $user->id) {
+                abort(403, 'Доступ запрещен. Этот чат не назначен вам.');
+            }
+
         // Отправляем сообщение через MessengerService
         $messengerService = app('\App\Services\MessengerService');
         $message = $messengerService->sendManagerMessage($chat, $cleanContent, $user);
 
         \Log::info('Сообщение создано', ['message_id' => $message->id, 'content' => $message->content]);
 
-        return response()->json([
+        // Очищаем данные перед отправкой JSON
+        $responseData = [
             'success' => true,
             'message' => [
                 'id' => $message->id,
-                'content' => $message->content,
+                'content' => $this->cleanForJson($cleanContent), // Используем оригинальное сообщение
                 'created_at' => $message->created_at,
                 'is_from_client' => false,
-                'sender_name' => $user->name,
-                'sender_avatar' => strtoupper(substr($user->name, 0, 1)),
+                'sender_name' => $this->cleanForJson($user->name),
+                'sender_avatar' => strtoupper(substr($this->cleanForJson($user->name), 0, 1)),
                 'type' => $message->type,
                 'user_id' => $message->user_id
             ]
-        ]);
+        ];
+
+        return response()->json($responseData);
         } catch (\Exception $e) {
             \Log::error('Ошибка в sendMessage: ' . $e->getMessage(), [
                 'chatId' => $chatId,
@@ -429,6 +515,93 @@ class UserChatController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Ошибка отправки сообщения: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Проверяет, является ли пользователь руководителем
+     */
+    private function isManager($user)
+    {
+        // Проверяем роль пользователя
+        if ($user->role === 'admin' || $user->role === 'manager') {
+            return true;
+        }
+        
+        // Проверяем должность
+        return $user->position && (
+            strpos(strtolower($user->position), 'руководитель') !== false ||
+            strpos(strtolower($user->position), 'менеджер') !== false
+        );
+    }
+
+    /**
+     * Очистка текста для JSON
+     */
+    private function cleanForJson($text)
+    {
+        if (empty($text)) {
+            return '';
+        }
+        
+        // Конвертируем в UTF-8
+        $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
+        
+        // Удаляем управляющие символы, но сохраняем переносы строк (\n, \r)
+        $text = preg_replace('/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/', '', $text);
+        
+        // Удаляем UTF-8 replacement characters
+        $text = str_replace("\u{FFFD}", '', $text);
+        
+        // Дополнительная проверка
+        if (!mb_check_encoding($text, 'UTF-8')) {
+            $text = iconv('UTF-8', 'UTF-8//IGNORE', $text);
+        }
+        
+        return $text;
+    }
+
+    /**
+     * Завершить чат
+     */
+    public function endChat(Request $request, $chatId)
+    {
+        try {
+            $user = Auth::user();
+            
+            $chat = Chat::where('is_messenger_chat', true)->findOrFail($chatId);
+            
+            // Проверяем доступ к чату
+            if ($user->role !== 'admin' && $chat->department_id !== $user->department_id) {
+                abort(403, 'Доступ запрещен. Этот чат не принадлежит вашему отделу.');
+            }
+            
+            // Если пользователь не руководитель, проверяем назначение
+            if ($user->role !== 'admin' && !$this->isManager($user) && $chat->assigned_to !== $user->id) {
+                abort(403, 'Доступ запрещен. Этот чат не назначен вам.');
+            }
+            
+            // Обновляем статус чата на завершенный
+            $chat->update([
+                'messenger_status' => 'completed',
+                'closed_at' => now()
+            ]);
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'Чат успешно завершен'
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Ошибка в endChat: ' . $e->getMessage(), [
+                'chatId' => $chatId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Ошибка завершения чата: ' . $e->getMessage()
             ], 500);
         }
     }

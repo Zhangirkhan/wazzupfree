@@ -10,10 +10,11 @@
 <?php $component->withAttributes([]); ?>
     <?php $__env->startSection('title', 'Чат'); ?>
     <?php $__env->startSection('content'); ?>
-    <div class="h-[calc(100vh-120px)] bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-        <div class="flex h-full">
+    <div class="flex justify-center" style="height: 700px; max-height: 700px;">
+        <div class="h-[700px] bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700" style="height: 700px; max-height: 700px;">
+            <div class="flex h-[700px]" style="height: 700px; max-height: 700px;">
             <!-- Контакты слева -->
-            <div class="w-80 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+            <div class="w-80 border-r border-gray-200 dark:border-gray-700 flex flex-col min-h-0">
                 <!-- Заголовок контактов -->
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                     <div class="flex items-center justify-between">
@@ -45,7 +46,7 @@
                 </div>
 
                 <!-- Список контактов -->
-                <div class="flex-1 overflow-y-auto" id="chatsList">
+                <div class="flex-1 overflow-y-auto min-h-0" id="chatsList">
                     <?php $__empty_1 = true; $__currentLoopData = $chatsData; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $chat): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?>
                         <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-600 chat-item <?php echo e(request('chat') == $chat['id'] ? 'bg-blue-50 dark:bg-blue-900/20' : ''); ?>" data-chat-id="<?php echo e($chat['id']); ?>">
                             <div class="flex items-center space-x-3">
@@ -89,7 +90,7 @@
             </div>
 
             <!-- Окно чата справа -->
-            <div class="flex-1 flex flex-col" id="chatWindow">
+            <div class="flex-1 flex flex-col min-h-0" id="chatWindow">
                 <!-- Заголовок чата -->
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700" id="chatHeader">
                     <div class="flex items-center space-x-3">
@@ -137,6 +138,15 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                 </svg>
                             </button>
+                            <!-- Кнопка завершения диалога -->
+                            <button id="endChatBtn" 
+                                    class="p-2 text-red-400 hover:text-red-600 dark:hover:text-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors duration-200" 
+                                    style="display: block;"
+                                    title="Завершить диалог">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
                             <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -147,14 +157,14 @@
                 </div>
 
                 <!-- Сообщения -->
-                <div class="flex-1 overflow-y-auto p-4 space-y-4" id="messagesContainer">
+                <div class="flex-1 overflow-y-auto p-4 space-y-4 min-h-0" id="messagesContainer">
                     <?php if($currentChat && count($currentMessages) > 0): ?>
                         <?php $__currentLoopData = $currentMessages; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $message): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?>
                             <?php if($message['sender_name'] === 'Система'): ?>
                                 <!-- Системное сообщение (по центру) -->
                                 <div class="flex justify-center mb-4">
                                     <div class="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2 max-w-md">
-                                        <p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line text-center"><?php echo e($message['content']); ?></p>
+                                        <p class="text-sm text-gray-600 dark:text-gray-400 text-left"><?php echo nl2br(e($message['content'])); ?></p>
                                     </div>
                                 </div>
                                 <div class="flex justify-center items-center space-x-2 mb-4">
@@ -171,7 +181,7 @@
                                     <div class="flex-1 relative">
                                         <!-- Имя автора сверху -->
                                         <div class="flex items-center space-x-2 mb-1">
-                                            <p class="text-xs font-medium text-gray-700 dark:text-gray-300"><?php echo e($message['sender_name']); ?></p>
+                                            <p class="text-sm font-bold text-gray-900 dark:text-white"><?php echo e($message['sender_name']); ?></p>
                                             <p class="text-xs text-gray-500 dark:text-gray-400"><?php echo e(\Carbon\Carbon::parse($message['created_at'])->format('H:i')); ?></p>
                                         </div>
                                         <div class="bg-gray-200 dark:bg-gray-700 rounded-lg px-4 py-2 max-w-xs">
@@ -190,13 +200,13 @@
                             <?php else: ?>
                                 <!-- Сообщение от менеджера (справа) -->
                                 <div class="flex items-start space-x-3 justify-end group mb-4" data-message-id="<?php echo e($message['id']); ?>" data-message-content="<?php echo e($message['content']); ?>" data-message-time="<?php echo e($message['created_at']); ?>">
-                                    <div class="flex-1 flex justify-end relative">
+                                    <div class="flex-1 relative">
                                         <!-- Имя автора сверху -->
                                         <div class="flex items-center space-x-2 mb-1 justify-end">
-                                            <p class="text-xs font-medium text-gray-700 dark:text-gray-300"><?php echo e($message['sender_name']); ?></p>
+                                            <p class="text-sm font-bold text-gray-900 dark:text-white"><?php echo e($message['sender_name']); ?></p>
                                             <p class="text-xs text-gray-500 dark:text-gray-400"><?php echo e(\Carbon\Carbon::parse($message['created_at'])->format('H:i')); ?></p>
                                         </div>
-                                        <div class="bg-blue-500 rounded-lg px-4 py-2 max-w-xs">
+                                        <div class="bg-blue-500 rounded-lg px-4 py-2 max-w-xs ml-auto">
                                             <p class="text-sm text-white whitespace-pre-line"><?php echo e($message['content']); ?></p>
                                         </div>
                                         <!-- Кнопка удаления (для своих сообщений или админов) -->
@@ -266,9 +276,72 @@
             </div>
         </div>
     </div>
+    </div>
 
     <!-- Модальное окно для создания чата -->
     <div id="addChatModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50 flex items-center justify-center">
+    
+    <!-- Модальное окно подтверждения завершения диалога -->
+    <div id="endChatConfirmModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-[9999] flex items-center justify-center" style="z-index: 9999;">
+        <div class="relative mx-auto p-6 border w-96 max-w-md shadow-xl rounded-lg bg-white dark:bg-gray-800">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Завершить диалог</h3>
+                    <button id="closeEndChatModalBtn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="mb-6">
+                    <div class="flex items-center mb-4">
+                        <div class="w-10 h-10 bg-red-100 dark:bg-red-900 rounded-full flex items-center justify-center mr-3">
+                            <svg class="w-6 h-6 text-red-600 dark:text-red-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 dark:text-white">Подтверждение завершения</h4>
+                            <p class="text-sm text-gray-500 dark:text-gray-400">Это действие нельзя отменить</p>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                        <div class="flex">
+                            <div class="flex-shrink-0">
+                                <svg class="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                                </svg>
+                            </div>
+                            <div class="ml-3">
+                                <h5 class="text-sm font-medium text-yellow-800 dark:text-yellow-200">Что произойдет:</h5>
+                                <div class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
+                                    <ul class="list-disc list-inside space-y-1">
+                                        <li>Клиент получит сообщение о завершении</li>
+                                        <li>Диалог будет помечен как завершенный</li>
+                                        <li>Клиент сможет продолжить общение, написав 1 или 0</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button id="cancelEndChatBtn" class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+                        Отмена
+                    </button>
+                    <button id="confirmEndChatBtn" class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 active:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center space-x-2">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        <span>Завершить диалог</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
         <div class="relative mx-auto p-6 border w-96 max-w-md shadow-xl rounded-lg bg-white dark:bg-gray-800">
             <div class="mt-3">
                 <div class="flex items-center justify-between mb-4">
@@ -327,6 +400,10 @@
             const chatTitle = document.getElementById('chatTitle');
             const chatStatus = document.getElementById('chatStatus');
             const chatAvatar = document.getElementById('chatAvatar');
+            const endChatBtn = document.getElementById('endChatBtn');
+
+
+
             let searchTimeout;
             let currentChatId = null;
 
@@ -418,6 +495,16 @@
             // Инициализация текущего чата при загрузке страницы
             <?php if($currentChat): ?>
                 currentChatId = <?php echo e($currentChat['id']); ?>;
+                // Показываем кнопку завершения диалога для менеджеров и руководителей
+                showEndChatButton();
+                
+                // Автоматический скролл к последнему сообщению при загрузке
+                setTimeout(() => {
+                    const messagesContainer = document.getElementById('messagesContainer');
+                    if (messagesContainer) {
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    }
+                }, 100);
             <?php endif; ?>
 
             // Переменные для автообновления
@@ -488,10 +575,12 @@
                 let messageHtml = '';
                 
                 if (message.sender_name === 'Система') {
+                    // Заменяем \n на <br> для правильного отображения переносов строк
+                    const formattedContent = message.content.replace(/\n/g, '<br>');
                     messageHtml = `
                         <div class="flex justify-center mb-4">
                             <div class="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2 max-w-md">
-                                <p class="text-sm text-gray-600 dark:text-gray-400 whitespace-pre-line text-center">${message.content}</p>
+                                <p class="text-sm text-gray-600 dark:text-gray-400 text-left">${formattedContent}</p>
                             </div>
                         </div>
                         <div class="flex justify-center items-center space-x-2 mb-4">
@@ -509,7 +598,7 @@
                             <div class="flex-1">
                                 <!-- Имя автора сверху -->
                                 <div class="flex items-center space-x-2 mb-1">
-                                    <p class="text-xs font-medium text-gray-700 dark:text-gray-300">${message.sender_name}</p>
+                                    <p class="text-sm font-bold text-gray-900 dark:text-white">${message.sender_name}</p>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">${currentTime}</p>
                                 </div>
                                 <div class="bg-gray-200 dark:bg-gray-700 rounded-lg px-4 py-2 max-w-xs">
@@ -521,19 +610,19 @@
                 } else {
                     messageHtml = `
                         <div class="flex items-start space-x-3 justify-end mb-4" data-message-id="${message.id}" data-message-content="${message.content}" data-message-time="${message.created_at}">
-                            <div class="flex-1 flex justify-end">
+                            <div class="flex-1">
                                 <!-- Имя автора сверху -->
                                 <div class="flex items-center space-x-2 mb-1 justify-end">
-                                    <p class="text-xs font-medium text-gray-700 dark:text-gray-300">${message.sender_name}</p>
+                                    <p class="text-sm font-bold text-gray-900 dark:text-white">${message.sender_name}</p>
                                     <p class="text-xs text-gray-500 dark:text-gray-400">${currentTime}</p>
                                 </div>
-                                <div class="bg-blue-500 rounded-lg px-4 py-2 max-w-xs">
+                                <div class="bg-blue-500 rounded-lg px-4 py-2 max-w-xs ml-auto">
                                     <p class="text-sm text-white whitespace-pre-line">${message.content}</p>
                                 </div>
                             </div>
                             <div class="flex-shrink-0">
                                 <div class="h-8 w-8 bg-red-500 rounded-full flex items-center justify-center">
-                                    <span class="text-xs font-medium text-white">М</span>
+                                    <span class="text-xs font-medium text-white">${message.sender_avatar || 'М'}</span>
                                 </div>
                             </div>
                         </div>
@@ -541,6 +630,11 @@
                 }
                 
                 messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
+                
+                // Автоматический скролл к новому сообщению
+                setTimeout(() => {
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }, 50);
             }
             
             // Функция для запуска автообновления
@@ -637,20 +731,21 @@
                 
                 const tempMessageHtml = `
                     <div class="flex items-start space-x-3 justify-end" data-message-id="${tempMessageId}" data-temp="true">
-                        <div class="flex-1 flex justify-end">
-                            <div class="bg-blue-500 rounded-lg px-4 py-2 max-w-xs">
+                        <div class="flex-1">
+                            <!-- Имя автора сверху -->
+                            <div class="flex items-center space-x-2 mb-1 justify-end">
+                                <p class="text-sm font-bold text-gray-900 dark:text-white"><?php echo e(auth()->user()->name); ?></p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">${currentTime}</p>
+                            </div>
+                            <div class="bg-blue-500 rounded-lg px-4 py-2 max-w-xs ml-auto">
                                 <p class="text-sm text-white whitespace-pre-line">${content}</p>
                             </div>
                         </div>
                         <div class="flex-shrink-0">
                             <div class="h-8 w-8 bg-red-500 rounded-full flex items-center justify-center">
-                                <span class="text-xs font-medium text-white">М</span>
+                                <span class="text-xs font-medium text-white"><?php echo e(strtoupper(substr(auth()->user()->name, 0, 1))); ?></span>
                             </div>
                         </div>
-                    </div>
-                    <div class="flex justify-end items-center space-x-2 mb-4">
-                        <p class="text-xs font-medium text-gray-700 dark:text-gray-300">Менеджер</p>
-                        <p class="text-xs text-gray-500 dark:text-gray-400">${currentTime}</p>
                     </div>
                 `;
                 
@@ -673,7 +768,8 @@
                 .then(data => {
                     console.log('Данные ответа:', data);
                     if (!data.success) {
-                        console.error('Ошибка отправки сообщения:', data.message);
+                        console.error('Ошибка отправки сообщения:', data.error || data.message);
+                        alert('Ошибка отправки сообщения: ' + (data.error || data.message));
                         // Удаляем временное сообщение при ошибке
                         const tempMessage = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                         if (tempMessage) {
@@ -703,6 +799,7 @@
                 })
                 .catch(error => {
                     console.error('Ошибка отправки сообщения:', error);
+                    alert('Ошибка отправки сообщения: ' + error.message);
                     // Удаляем временное сообщение при ошибке
                     const tempMessage = document.querySelector(`[data-message-id="${tempMessageId}"]`);
                     if (tempMessage) {
@@ -790,6 +887,91 @@
                     closeModal();
                 }
             });
+
+            // Функция для показа кнопки завершения диалога
+            function showEndChatButton() {
+                // Проверяем, является ли пользователь менеджером или руководителем
+                const userRole = '<?php echo e(Auth::user()->role); ?>';
+                const userPosition = '<?php echo e(Auth::user()->position); ?>';
+                
+                const isManager = userRole === 'admin' || 
+                                 userRole === 'manager' || 
+                                 userPosition.toLowerCase().includes('руководитель') ||
+                                 userPosition.toLowerCase().includes('менеджер');
+                
+                if (isManager) {
+                    endChatBtn.style.display = 'block';
+                } else {
+                    endChatBtn.style.display = 'none';
+                }
+            }
+
+            // Обработчик кнопки завершения диалога
+            endChatBtn.addEventListener('click', function() {
+                if (!currentChatId) {
+                    alert('Чат не выбран');
+                    return;
+                }
+
+                // Простое решение - используем confirm
+                if (confirm('Вы уверены, что хотите завершить этот диалог?')) {
+                    endChat();
+                }
+            });
+
+
+
+
+
+            // Функция завершения диалога
+            function endChat() {
+                const endMessage = 'Спасибо за обращение диалог будет завершен. Для продолжения напишите 1 или 0 для возврата в меню.';
+                
+                // Отправляем сообщение о завершении
+                fetch(`<?php echo e(url('/user/chat/send')); ?>/${currentChatId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({
+                        content: endMessage
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Обновляем статус чата на завершенный
+                        fetch(`<?php echo e(url('/user/chat/end')); ?>/${currentChatId}`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                alert('Диалог успешно завершен');
+                                // Перезагружаем страницу для обновления статуса
+                                window.location.reload();
+                            } else {
+                                alert('Ошибка при завершении диалога: ' + (data.error || 'Неизвестная ошибка'));
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Ошибка завершения диалога:', error);
+                            alert('Ошибка при завершении диалога');
+                        });
+                    } else {
+                        alert('Ошибка при отправке сообщения: ' + (data.error || 'Неизвестная ошибка'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка отправки сообщения:', error);
+                    alert('Ошибка при отправке сообщения');
+                });
+            }
 
             // Создание чата
             createChatForm.addEventListener('submit', function(e) {
