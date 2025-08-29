@@ -140,6 +140,28 @@
 
     <!-- Right section -->
     <div class="flex items-center gap-x-4 lg:gap-x-6">
+        <!-- Notifications -->
+        <?php if (isset($component)) { $__componentOriginalecb847bac2255710311f05b1597b573d = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalecb847bac2255710311f05b1597b573d = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.notifications.notification-bell','data' => []] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('notifications.notification-bell'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes([]); ?>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalecb847bac2255710311f05b1597b573d)): ?>
+<?php $attributes = $__attributesOriginalecb847bac2255710311f05b1597b573d; ?>
+<?php unset($__attributesOriginalecb847bac2255710311f05b1597b573d); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalecb847bac2255710311f05b1597b573d)): ?>
+<?php $component = $__componentOriginalecb847bac2255710311f05b1597b573d; ?>
+<?php unset($__componentOriginalecb847bac2255710311f05b1597b573d); ?>
+<?php endif; ?>
+
         <!-- Theme Toggle -->
         <?php if (isset($component)) { $__componentOriginal2a150422db7e68d932ef433b3d6df996 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal2a150422db7e68d932ef433b3d6df996 = $attributes; } ?>

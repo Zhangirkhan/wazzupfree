@@ -114,6 +114,9 @@
 
     <!-- Right section -->
     <div class="flex items-center gap-x-4 lg:gap-x-6">
+        <!-- Notifications -->
+        <x-notifications.notification-bell />
+
         <!-- Theme Toggle -->
         <x-settings.theme-toggle />
 

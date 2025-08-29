@@ -7,6 +7,7 @@ use App\Models\Message;
 use App\Models\Department;
 use App\Models\User;
 use App\Models\Client;
+use App\Services\ChatHistoryService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -136,6 +137,10 @@ class MessengerService
                     'messenger_status' => 'department_selected'
                 ]);
                 
+                // Логируем выбор отдела
+                $historyService = app(ChatHistoryService::class);
+                $historyService->logDepartmentSelection($chat, $department);
+                
                 $this->sendMessage($chat, "Вы выбрали отдел: {$department->name}\n\nТеперь напишите ваш вопрос:");
                 return;
             }
@@ -172,6 +177,10 @@ class MessengerService
                     'department_id' => $department['id']
                 ]);
                 
+                // Логируем выбор отдела для тестовых номеров
+                $historyService = app(ChatHistoryService::class);
+                $historyService->logDepartmentSelection($chat, Department::find($department['id']));
+                
                 $this->sendMessage($chat, "Подключаем с {$department['name']}. Пожалуйста, можете задать вопрос.");
                 return;
             }
@@ -192,6 +201,12 @@ class MessengerService
      */
     protected function handleDepartmentSelection($chat, $message, $client)
     {
+        // Обрабатываем "0" - сброс к меню
+        if ($message === '0') {
+            $this->resetToMenu($chat, $client);
+            return;
+        }
+        
         if (empty(trim($message))) {
             $this->sendMessage($chat, "Пожалуйста, напишите ваш вопрос:");
             return;
@@ -215,6 +230,12 @@ class MessengerService
      */
     protected function handleActiveChat($chat, $message, $client)
     {
+        // Обрабатываем "0" - сброс к меню
+        if ($message === '0') {
+            $this->resetToMenu($chat, $client);
+            return;
+        }
+        
         // Обновляем время активности
         $chat->update(['last_activity_at' => now()]);
         
@@ -262,6 +283,10 @@ class MessengerService
             'department_id' => null,
             'assigned_to' => null
         ]);
+        
+        // Логируем сброс чата
+        $historyService = app(ChatHistoryService::class);
+        $historyService->logChatReset($chat);
         
         // Отправляем меню заново при сбросе
         $this->sendInitialMenu($chat, $client);
@@ -408,6 +433,10 @@ class MessengerService
                     'assigned_to' => $manager->id,
                     'last_activity_at' => now()
                 ]);
+                
+                // Логируем назначение менеджера
+                $historyService = app(ChatHistoryService::class);
+                $historyService->logManagerAssignment($chat, $manager);
                 
                 Log::info("Chat auto-assigned to manager", [
                     'chat_id' => $chat->id,

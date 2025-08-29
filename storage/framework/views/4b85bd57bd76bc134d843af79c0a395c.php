@@ -64,7 +64,7 @@
                                         <span class="text-xs text-gray-400"><?php echo e($chat['last_message_time']->format('H:i')); ?></span>
                                     <?php endif; ?>
                                     <?php if($chat['unread_count'] > 0): ?>
-                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 mt-1">
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200 mt-1 unread-badge">
                                             <?php echo e($chat['unread_count']); ?>
 
                                         </span>
@@ -136,6 +136,22 @@
                             <button class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                                 <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                            </button>
+                            <!-- Кнопка переключения отдела -->
+                            <button id="transferBtn" 
+                                    class="p-2 text-green-400 hover:text-green-600 dark:hover:text-green-300 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors duration-200" 
+                                    title="Переключить отдел">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                                </svg>
+                            </button>
+                            <!-- Кнопка истории -->
+                            <button id="historyBtn" 
+                                    class="p-2 text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors duration-200" 
+                                    title="История чата">
+                                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </button>
                             <!-- Кнопка завершения диалога -->
@@ -1021,6 +1037,448 @@
                     submitBtn.disabled = false;
                 });
             });
+        });
+
+        // Обработчик кнопки переключения отдела
+        const transferBtn = document.getElementById('transferBtn');
+        if (transferBtn) {
+            transferBtn.addEventListener('click', function() {
+                if (!currentChatId) {
+                    alert('Чат не выбран');
+                    return;
+                }
+                showTransferModal();
+            });
+        }
+
+        // Обработчик кнопки истории
+        const historyBtn = document.getElementById('historyBtn');
+        if (historyBtn) {
+            historyBtn.addEventListener('click', function() {
+                if (!currentChatId) {
+                    alert('Чат не выбран');
+                    return;
+                }
+                showHistoryModal();
+            });
+        }
+
+        // Функция показа модального окна истории
+        function showHistoryModal() {
+            fetch(`<?php echo e(url('/user/chat/history')); ?>/${currentChatId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayHistory(data.history);
+                    } else {
+                        alert('Ошибка при получении истории: ' + (data.error || 'Неизвестная ошибка'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка получения истории:', error);
+                    alert('Ошибка при получении истории');
+                });
+        }
+
+        // Функция отображения истории
+        function displayHistory(history) {
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.id = 'historyModal';
+            
+            let historyHtml = `
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+                    <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">История чата</h3>
+                        <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="p-6 overflow-y-auto max-h-[60vh]">
+            `;
+            
+            if (history.length === 0) {
+                historyHtml += '<p class="text-gray-500 dark:text-gray-400 text-center">История пуста</p>';
+            } else {
+                historyHtml += '<div class="space-y-4">';
+                history.forEach(item => {
+                    const actionIcon = getActionIcon(item.action);
+                    const actionColor = getActionColor(item.action);
+                    
+                    historyHtml += `
+                        <div class="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div class="flex-shrink-0">
+                                <div class="h-8 w-8 ${actionColor} rounded-full flex items-center justify-center">
+                                    ${actionIcon}
+                                </div>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-sm font-medium text-gray-900 dark:text-white">${item.description}</p>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400">${item.created_at}</p>
+                                </div>
+                                <div class="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                                    ${item.user_name ? `Пользователь: ${item.user_name}` : ''}
+                                    ${item.department_name ? ` | Отдел: ${item.department_name}` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                historyHtml += '</div>';
+            }
+            
+            historyHtml += `
+                    </div>
+                </div>
+            `;
+            
+            modal.innerHTML = historyHtml;
+            document.body.appendChild(modal);
+        }
+
+        // Функция закрытия модального окна истории
+        function closeHistoryModal() {
+            const modal = document.getElementById('historyModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // Функция получения иконки для действия
+        function getActionIcon(action) {
+            switch(action) {
+                case 'department_selected':
+                    return '<svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>';
+                case 'assigned_to':
+                    return '<svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>';
+                case 'completed':
+                    return '<svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
+                case 'reset':
+                    return '<svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>';
+                default:
+                    return '<svg class="h-4 w-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>';
+            }
+        }
+
+        // Функция получения цвета для действия
+        function getActionColor(action) {
+            switch(action) {
+                case 'department_selected':
+                    return 'bg-blue-500';
+                case 'assigned_to':
+                    return 'bg-green-500';
+                case 'completed':
+                    return 'bg-red-500';
+                case 'reset':
+                    return 'bg-yellow-500';
+                default:
+                    return 'bg-gray-500';
+            }
+        }
+
+        // Функция показа модального окна переключения отдела
+        function showTransferModal() {
+            const currentChatId = getCurrentChatId();
+            if (!currentChatId) {
+                alert('Выберите чат для переключения');
+                return;
+            }
+
+            const modal = document.createElement('div');
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.id = 'transferModal';
+            
+            let modalHtml = `
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+                    <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Переключить отдел</h3>
+                        <button onclick="closeTransferModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="p-6">
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                            Выберите отдел, в который нужно перевести чат:
+                        </p>
+                        <div class="space-y-3">
+                            <button onclick="transferToDepartment(1)" class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <div class="flex items-center space-x-3">
+                                    <div class="h-8 w-8 bg-blue-500 rounded-full flex items-center justify-center">
+                                        <span class="text-sm font-medium text-white">Б</span>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white">Бухгалтерия</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">Финансовые вопросы</p>
+                                    </div>
+                                </div>
+                            </button>
+                            <button onclick="transferToDepartment(2)" class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <div class="flex items-center space-x-3">
+                                    <div class="h-8 w-8 bg-green-500 rounded-full flex items-center justify-center">
+                                        <span class="text-sm font-medium text-white">IT</span>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white">IT отдел</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">Техническая поддержка</p>
+                                    </div>
+                                </div>
+                            </button>
+                            <button onclick="transferToDepartment(3)" class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <div class="flex items-center space-x-3">
+                                    <div class="h-8 w-8 bg-purple-500 rounded-full flex items-center justify-center">
+                                        <span class="text-sm font-medium text-white">HR</span>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white">HR отдел</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">Кадровые вопросы</p>
+                                    </div>
+                                </div>
+                            </button>
+                            <button onclick="transferToDepartment(4)" class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <div class="flex items-center space-x-3">
+                                    <div class="h-8 w-8 bg-orange-500 rounded-full flex items-center justify-center">
+                                        <span class="text-sm font-medium text-white">Т</span>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white">Вопросы по товарам</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">Товары в аптеке</p>
+                                    </div>
+                                </div>
+                            </button>
+                            <button onclick="transferToDepartment(null)" class="w-full text-left p-3 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                                <div class="flex items-center space-x-3">
+                                    <div class="h-8 w-8 bg-gray-500 rounded-full flex items-center justify-center">
+                                        <span class="text-sm font-medium text-white">—</span>
+                                    </div>
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white">Без отдела</p>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">Сбросить назначение</p>
+                                    </div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            modal.innerHTML = modalHtml;
+            document.body.appendChild(modal);
+        }
+
+        // Функция закрытия модального окна переключения
+        function closeTransferModal() {
+            const modal = document.getElementById('transferModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // Функция переключения чата в отдел
+        async function transferToDepartment(departmentId) {
+            const currentChatId = getCurrentChatId();
+            if (!currentChatId) {
+                alert('Ошибка: чат не выбран');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/user/chat/transfer/${currentChatId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    body: JSON.stringify({
+                        department_id: departmentId
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    closeTransferModal();
+                    alert('Чат успешно переведен в отдел');
+                    // Обновляем страницу для отображения изменений
+                    location.reload();
+                } else {
+                    alert('Ошибка: ' + (data.message || 'Не удалось перевести чат'));
+                }
+            } catch (error) {
+                console.error('Ошибка переключения отдела:', error);
+                alert('Ошибка при переключении отдела');
+            }
+        }
+
+        // Переменные для автоматического обновления
+        let lastMessageId = 0;
+        let updateInterval;
+        let isUpdating = false;
+
+        // Функция инициализации автоматического обновления
+        function initAutoUpdate() {
+            if (currentChatId) {
+                // Получаем ID последнего сообщения
+                const messages = document.querySelectorAll('[data-message-id]');
+                if (messages.length > 0) {
+                    const lastMessage = messages[messages.length - 1];
+                    lastMessageId = parseInt(lastMessage.getAttribute('data-message-id'));
+                }
+                
+                // Запускаем обновление каждые 3 секунды
+                updateInterval = setInterval(updateChat, 3000);
+            }
+        }
+
+        // Функция обновления чата
+        async function updateChat() {
+            if (!currentChatId || isUpdating) return;
+            
+            isUpdating = true;
+            
+            try {
+                const response = await fetch(`/user/chat/messages/${currentChatId}?last_id=${lastMessageId}`);
+                const data = await response.json();
+                
+                if (data.success && data.messages.length > 0) {
+                    // Добавляем новые сообщения
+                    const messagesContainer = document.getElementById('messagesContainer');
+                    
+                    data.messages.forEach(message => {
+                        if (message.id > lastMessageId) {
+                            const messageHtml = createMessageHtml(message);
+                            messagesContainer.insertAdjacentHTML('beforeend', messageHtml);
+                            lastMessageId = message.id;
+                        }
+                    });
+                    
+                    // Прокручиваем к последнему сообщению
+                    scrollToBottom();
+                    
+                    // Обновляем счетчик непрочитанных в списке чатов
+                    updateUnreadCount();
+                }
+            } catch (error) {
+                console.error('Ошибка обновления чата:', error);
+            } finally {
+                isUpdating = false;
+            }
+        }
+
+        // Функция создания HTML для сообщения
+        function createMessageHtml(message) {
+            if (message.sender_name === 'Система') {
+                return `
+                    <div class="flex justify-center mb-4">
+                        <div class="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2 max-w-md">
+                            <p class="text-sm text-gray-600 dark:text-gray-400 text-left">${message.content}</p>
+                        </div>
+                    </div>
+                    <div class="flex justify-center items-center space-x-2 mb-4">
+                        <p class="text-xs text-gray-500 dark:text-gray-400">${formatTime(message.created_at)}</p>
+                    </div>
+                `;
+            } else if (message.is_from_client) {
+                return `
+                    <div class="flex items-start space-x-3 group mb-4" data-message-id="${message.id}" data-message-content="${message.content}" data-message-time="${message.created_at}">
+                        <div class="flex-shrink-0">
+                            <div class="h-8 w-8 bg-gray-500 rounded-full flex items-center justify-center">
+                                <span class="text-xs font-medium text-white">К</span>
+                            </div>
+                        </div>
+                        <div class="flex-1 relative">
+                            <div class="flex items-center space-x-2 mb-1">
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">${message.sender_name}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">${formatTime(message.created_at)}</p>
+                            </div>
+                            <div class="bg-gray-100 dark:bg-gray-700 rounded-lg px-4 py-2 max-w-md">
+                                <p class="text-sm text-gray-900 dark:text-white">${message.content}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                return `
+                    <div class="flex items-start space-x-3 group mb-4 justify-end" data-message-id="${message.id}" data-message-content="${message.content}" data-message-time="${message.created_at}">
+                        <div class="flex-1 relative">
+                            <div class="flex items-center space-x-2 mb-1 justify-end">
+                                <p class="text-xs text-gray-500 dark:text-gray-400">${formatTime(message.created_at)}</p>
+                                <p class="text-sm font-bold text-gray-900 dark:text-white">${message.sender_name}</p>
+                            </div>
+                            <div class="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-md ml-auto">
+                                <p class="text-sm">${message.content}</p>
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <div class="h-8 w-8 bg-blue-500 rounded-full flex items-center justify-center">
+                                <span class="text-xs font-medium text-white">С</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Функция форматирования времени
+        function formatTime(timestamp) {
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        // Функция прокрутки к последнему сообщению
+        function scrollToBottom() {
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Функция обновления счетчика непрочитанных
+        function updateUnreadCount() {
+            const currentChatItem = document.querySelector(`[data-chat-id="${currentChatId}"]`);
+            if (currentChatItem) {
+                // Убираем красный бейдж у текущего чата
+                const unreadBadge = currentChatItem.querySelector('.unread-badge');
+                if (unreadBadge) {
+                    unreadBadge.remove();
+                }
+            }
+        }
+
+        // Функция остановки автоматического обновления
+        function stopAutoUpdate() {
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+        }
+
+        // Обработчик изменения чата
+        function onChatChange() {
+            stopAutoUpdate();
+            initAutoUpdate();
+        }
+
+        // Инициализация при загрузке страницы
+        document.addEventListener('DOMContentLoaded', function() {
+            if (currentChatId) {
+                initAutoUpdate();
+            }
+        });
+
+        // Обработчик клика по чату (обновляем существующий)
+        document.addEventListener('click', function(e) {
+            if (e.target.closest('.chat-item')) {
+                const chatItem = e.target.closest('.chat-item');
+                const chatId = chatItem.getAttribute('data-chat-id');
+                
+                if (chatId && chatId !== currentChatId) {
+                    currentChatId = chatId;
+                    onChatChange();
+                }
+            }
         });
     </script>
     <?php $__env->stopSection(); ?>

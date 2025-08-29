@@ -98,6 +98,11 @@ class Chat extends Model
         return $this->belongsTo(Department::class);
     }
 
+    public function history(): HasMany
+    {
+        return $this->hasMany(ChatHistory::class);
+    }
+
     public function scopeMessenger($query)
     {
         return $query->where('is_messenger_chat', true);

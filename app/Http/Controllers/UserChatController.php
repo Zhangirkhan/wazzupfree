@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Chat;
 use App\Models\Client;
 use App\Models\Message;
+use App\Services\ChatHistoryService;
 use Illuminate\Support\Facades\Auth;
 
 class UserChatController extends Controller
@@ -92,6 +93,24 @@ class UserChatController extends Controller
                 }
             }
 
+            // Рассчитываем количество непрочитанных сообщений
+            $unreadCount = 0;
+            $user = Auth::user();
+            
+            if ($chat->assigned_to === $user->id) {
+                // Если чат назначен пользователю, считаем все прочитанными
+                $unreadCount = 0;
+            } elseif ($user->role === 'admin' || $this->isManager($user)) {
+                // Админы и руководители видят все как прочитанные
+                $unreadCount = 0;
+            } else {
+                // Для обычных сотрудников считаем непрочитанными сообщения от клиентов
+                $unreadCount = $chat->messages()
+                    ->where('metadata->direction', 'incoming')
+                    ->where('created_at', '>', now()->subDays(1)) // Только за последний день
+                    ->count();
+            }
+
             return [
                 'id' => $chat->id,
                 'title' => $chat->messenger_phone ?? $chat->title ?? 'Без названия',
@@ -99,7 +118,7 @@ class UserChatController extends Controller
                 'is_online' => $chat->messenger_status === 'active',
                 'last_message_preview' => $lastMessagePreview,
                 'last_message_time' => $lastMessageTime,
-                'unread_count' => $chat->messenger_status === 'active' && !$chat->assigned_to ? 1 : 0,
+                'unread_count' => $unreadCount,
                 'department' => $chat->department ? $chat->department->name : null,
                 'assigned_to' => $chat->assignedTo ? $chat->assignedTo->name : null,
                 'status' => $chat->messenger_status,
@@ -357,7 +376,7 @@ class UserChatController extends Controller
     {
         try {
             $user = Auth::user();
-            $lastMessageId = $request->get('last_message_id');
+            $lastMessageId = $request->get('last_id') ?: $request->get('last_message_id');
             \Log::info('getMessages вызван', ['chatId' => $chatId, 'lastMessageId' => $lastMessageId]);
             
             $chat = Chat::where('is_messenger_chat', true)->findOrFail($chatId);
@@ -429,10 +448,27 @@ class UserChatController extends Controller
             
             \Log::info('Сообщения отформатированы');
         
+            // Определяем количество непрочитанных сообщений
+            $unreadCount = 0;
+            if ($chat->assigned_to === $user->id) {
+                // Если чат назначен пользователю, считаем все прочитанными
+                $unreadCount = 0;
+            } elseif ($user->role === 'admin' || $this->isManager($user)) {
+                // Админы и руководители видят все как прочитанные
+                $unreadCount = 0;
+            } else {
+                // Для обычных сотрудников считаем непрочитанными сообщения от клиентов
+                $unreadCount = $chat->messages()
+                    ->where('metadata->direction', 'incoming')
+                    ->where('created_at', '>', now()->subDays(1)) // Только за последний день
+                    ->count();
+            }
+
             return response()->json([
                 'success' => true,
                 'messages' => $formattedMessages,
-                'last_message_id' => $formattedMessages->last() ? $formattedMessages->last()['id'] : $lastMessageId
+                'last_message_id' => $formattedMessages->last() ? $formattedMessages->last()['id'] : $lastMessageId,
+                'unread_count' => $unreadCount
             ]);
             
         } catch (\Exception $e) {
@@ -588,6 +624,10 @@ class UserChatController extends Controller
                 'closed_at' => now()
             ]);
             
+            // Логируем завершение чата
+            $historyService = app(ChatHistoryService::class);
+            $historyService->logChatCompletion($chat, $user);
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Чат успешно завершен'
@@ -602,6 +642,64 @@ class UserChatController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Ошибка завершения чата: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Переключить чат в другой отдел
+     */
+    public function transferChat(Request $request, $chatId)
+    {
+        try {
+            $user = Auth::user();
+            $chat = Chat::where('is_messenger_chat', true)->findOrFail($chatId);
+            
+            // Проверяем доступ к чату
+            if ($user->role !== 'admin' && $chat->department_id !== $user->department_id) {
+                abort(403, 'Доступ запрещен. Этот чат не принадлежит вашему отделу.');
+            }
+            
+            // Если пользователь не руководитель, проверяем назначение
+            if ($user->role !== 'admin' && !$this->isManager($user) && $chat->assigned_to !== $user->id) {
+                abort(403, 'Доступ запрещен. Этот чат не назначен вам.');
+            }
+            
+            $departmentId = $request->input('department_id');
+            
+            // Обновляем отдел чата
+            $chat->update([
+                'department_id' => $departmentId,
+                'assigned_to' => null, // Сбрасываем назначение менеджера
+                'messenger_status' => $departmentId ? 'department_selected' : 'menu'
+            ]);
+            
+            // Логируем переключение отдела
+            if ($departmentId) {
+                $department = \App\Models\Department::find($departmentId);
+                $historyService = app(ChatHistoryService::class);
+                $historyService->logDepartmentSelection($chat, $department, $user);
+            } else {
+                $historyService = app(ChatHistoryService::class);
+                $historyService->logChatReset($chat, $user);
+            }
+            
+            return response()->json([
+                'success' => true,
+                'message' => $departmentId ? 'Чат успешно переведен в отдел' : 'Назначение отдела сброшено'
+            ]);
+            
+        } catch (\Exception $e) {
+            \Log::error('Ошибка переключения чата: ' . $e->getMessage(), [
+                'chat_id' => $chatId,
+                'user_id' => Auth::id(),
+                'department_id' => $request->input('department_id'),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'error' => 'Ошибка при переключении чата: ' . $e->getMessage()
             ], 500);
         }
     }
