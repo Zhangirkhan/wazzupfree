@@ -114,6 +114,52 @@
 
     <!-- Right section -->
     <div class="flex items-center gap-x-4 lg:gap-x-6">
+        <!-- Version -->
+        <div class="relative" x-data="{ open: false }">
+            <x-base.button 
+                type="button" 
+                variant="ghost" 
+                class="-m-1.5 p-1.5 text-gray-400 hover:text-gray-500 dark:hover:text-gray-300" 
+                @click="open = !open"
+                title="Версия приложения"
+            >
+                <span class="sr-only">Версия приложения</span>
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="ml-1 text-xs text-gray-500 dark:text-gray-400">v1.0.0</span>
+            </x-base.button>
+
+            <!-- Version dropdown -->
+            <div x-show="open" 
+                 x-transition:enter="transition ease-out duration-100"
+                 x-transition:enter-start="transform opacity-0 scale-95"
+                 x-transition:enter-end="transform opacity-100 scale-100"
+                 x-transition:leave="transition ease-in duration-75"
+                 x-transition:leave-start="transform opacity-100 scale-100"
+                 x-transition:leave-end="transform opacity-0 scale-95"
+                 class="absolute right-0 z-10 mt-2 w-64 origin-top-right rounded-md bg-white dark:bg-gray-800 py-2 shadow-lg ring-1 ring-gray-900/5 focus:outline-none"
+                 @click.away="open = false">
+                
+                <div class="px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-sm font-medium text-gray-900 dark:text-white">Версия приложения</h3>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">v1.0.0</p>
+                </div>
+                
+                <x-base.button 
+                    href="/changelog.txt" 
+                    target="_blank"
+                    variant="ghost" 
+                    class="w-full text-left justify-start"
+                >
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    История изменений
+                </x-base.button>
+            </div>
+        </div>
+
         <!-- Notifications -->
         <x-notifications.notification-bell />
 
