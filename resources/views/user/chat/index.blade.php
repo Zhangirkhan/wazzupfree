@@ -1,11 +1,157 @@
 <x-navigation.app>
     @section('title', 'Чат')
+    
+    <!-- Подключаем Lightbox2 CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.4/css/lightbox.min.css">
+    
+    <!-- Подключаем Emoji CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/emoji-mart@latest/css/emoji-mart.css">
+    
+    <!-- Подключаем Select2 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    
+    <!-- Подключаем jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- Подключаем Select2 JS -->
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    
+    <style>
+        /* Стили для sticky элементов */
+        #messageInputContainer {
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        
+        #chatHeader {
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+        }
+        
+        /* Стили для Select2 */
+        .select2-container--default .select2-selection--single {
+            height: 42px;
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            background-color: white;
+        }
+        
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            line-height: 40px;
+            padding-left: 12px;
+            color: #374151;
+        }
+        
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 40px;
+            right: 8px;
+        }
+        
+        .select2-dropdown {
+            border: 1px solid #d1d5db;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: #3b82f6;
+        }
+        
+        /* Темная тема для Select2 */
+        .dark .select2-container--default .select2-selection--single {
+            background-color: #374151;
+            border-color: #4b5563;
+        }
+        
+        .dark .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: #f9fafb;
+        }
+        
+        .dark .select2-dropdown {
+            background-color: #374151;
+            border-color: #4b5563;
+        }
+        
+        .dark .select2-container--default .select2-results__option {
+            background-color: #374151;
+            color: #f9fafb;
+        }
+        
+        .dark .select2-container--default .select2-results__option--highlighted[aria-selected] {
+            background-color: #3b82f6;
+        }
+        
+        /* Плавная прокрутка */
+        #messagesContainer {
+            scroll-behavior: smooth;
+        }
+        
+        /* Стили для модальных окон */
+        .modal-overlay {
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+        
+        /* Анимация появления модальных окон */
+        @keyframes modalFadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+        
+        .modal-content {
+            animation: modalFadeIn 0.2s ease-out;
+        }
+        
+        /* Стили для sticky системных сообщений */
+        .sticky-system-message {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: white;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .dark .sticky-system-message {
+            background: #111827;
+            border-bottom: 1px solid #4b5563;
+        }
+        
+        /* Плавная анимация для системных сообщений */
+        .system-message {
+            transition: all 0.3s ease;
+        }
+        
+        /* Стили для не-sticky системных сообщений */
+        .system-message:not(.sticky) {
+            opacity: 0.8;
+        }
+        
+        .system-message:not(.sticky):hover {
+            opacity: 1;
+        }
+        
+        /* Дополнительные стили для системных сообщений в темной теме */
+        .dark .system-message {
+            box-shadow: 0 1px 3px 0 rgba(59, 130, 246, 0.1);
+        }
+        
+        .dark .system-message:hover {
+            box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.2);
+        }
+    </style>
+    
     @section('content')
-    <div class="flex justify-center" style="height: 700px; max-height: 700px;">
-        <div class="h-[700px] bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700" style="height: 700px; max-height: 700px;">
-            <div class="flex h-[700px]" style="height: 700px; max-height: 700px;">
+    <div class="w-full" style="height: 700px;">
+        <div class="h-full bg-white dark:bg-gray-800">
+            <div class="flex h-full">
             <!-- Контакты слева -->
-            <div class="w-80 border-r border-gray-200 dark:border-gray-700 flex flex-col min-h-0">
+            <div class="w-64 border-r border-gray-200 dark:border-gray-700 flex flex-col min-h-0">
                 <!-- Заголовок контактов -->
                 <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                     <div class="flex items-center justify-between">
@@ -82,7 +228,7 @@
             <!-- Окно чата справа -->
             <div class="flex-1 flex flex-col min-h-0" id="chatWindow">
                 <!-- Заголовок чата -->
-                <div class="p-4 border-b border-gray-200 dark:border-gray-700" id="chatHeader">
+                <div class="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky top-0 z-10" id="chatHeader">
                     <div class="flex items-center space-x-3">
                         <div class="h-10 w-10 bg-blue-500 rounded-full flex items-center justify-center">
                             <span class="text-sm font-medium text-white" id="chatAvatar">
@@ -159,18 +305,26 @@
                 </div>
 
                 <!-- Сообщения -->
-                <div class="flex-1 overflow-y-auto p-4 space-y-4 min-h-0" id="messagesContainer">
+                <div class="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 pb-20" id="messagesContainer">
                     @if($currentChat && count($currentMessages) > 0)
+                        @php
+                            $systemMessages = $currentMessages->where('sender_name', 'Система');
+                            $lastSystemMessage = $systemMessages->last();
+                        @endphp
+                        
                         @foreach($currentMessages as $message)
                             @if($message['sender_name'] === 'Система')
                                 <!-- Системное сообщение (по центру) -->
-                                <div class="flex justify-center mb-4">
-                                    <div class="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2 max-w-md">
-                                        <p class="text-sm text-gray-600 dark:text-gray-400 text-left">{!! nl2br(e($message['content'])) !!}</p>
+                                <div class="flex justify-center mb-4 @if($message['id'] == $lastSystemMessage['id']) sticky top-10 z-10 bg-white dark:bg-gray-900 py-2 border-b border-gray-200 dark:border-gray-600 @endif system-message">
+                                    <div class="bg-gray-100 dark:bg-blue-900/30 rounded-lg px-4 py-2 max-w-md border border-gray-200 dark:border-blue-500/30 shadow-sm">
+                                        <div class="flex items-center space-x-2 mb-1">
+                                            <svg class="h-4 w-4 text-blue-500 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <p class="text-xs text-gray-500 dark:text-blue-300">{{ \Carbon\Carbon::parse($message['created_at'])->format('H:i') }}</p>
+                                        </div>
+                                        <p class="text-sm text-gray-600 dark:text-blue-200 text-left">{!! nl2br(e($message['content'])) !!}</p>
                                     </div>
-                                </div>
-                                <div class="flex justify-center items-center space-x-2 mb-4">
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">{{ \Carbon\Carbon::parse($message['created_at'])->format('H:i') }}</p>
                                 </div>
                             @elseif($message['is_from_client'])
                                 <!-- Сообщение от клиента (слева) -->
@@ -187,16 +341,86 @@
                                             <p class="text-xs text-gray-500 dark:text-gray-400">{{ \Carbon\Carbon::parse($message['created_at'])->format('H:i') }}</p>
                                         </div>
                                         <div class="bg-gray-200 dark:bg-gray-700 rounded-lg px-4 py-2 max-w-xs">
-                                            <p class="text-sm text-gray-900 dark:text-white whitespace-pre-line">{{ $message['content'] }}</p>
+                                            @if($message['type'] === 'image' && $message['image_data'])
+                                                <!-- Изображение -->
+                                                <div class="mb-2">
+                                                    <a href="{{ $message['image_data']['url'] }}" 
+                                                       data-lightbox="chat-images" 
+                                                       data-title="{{ $message['content'] !== 'Изображение' ? $message['content'] : 'Изображение' }}">
+                                                        <img src="{{ $message['image_data']['url'] }}" 
+                                                             alt="Изображение" 
+                                                             class="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity duration-200"
+                                                             style="max-height: 300px;">
+                                                    </a>
+                                                </div>
+                                            @elseif($message['type'] === 'video' && $message['video_data'])
+                                                <!-- Видео -->
+                                                <div class="mb-2">
+                                                    <video controls 
+                                                           class="max-w-full h-auto rounded-lg"
+                                                           style="max-height: 300px;">
+                                                        <source src="{{ $message['video_data']['url'] }}" type="video/{{ $message['video_data']['extension'] }}">
+                                                        Ваш браузер не поддерживает видео.
+                                                    </video>
+                                                </div>
+                                            @elseif($message['type'] === 'sticker' && $message['sticker_data'])
+                                                <!-- Стикер -->
+                                                <div class="mb-2">
+                                                    <img src="{{ $message['sticker_data']['url'] }}" 
+                                                         alt="Стикер" 
+                                                         class="max-w-32 h-auto rounded-lg">
+                                                </div>
+                                            @elseif($message['type'] === 'document' && $message['document_data'])
+                                                <!-- Документ -->
+                                                <div class="mb-2 p-3 bg-gray-100 dark:bg-gray-600 rounded-lg">
+                                                    <div class="flex items-center space-x-3">
+                                                        <svg class="h-8 w-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                        </svg>
+                                                        <div class="flex-1">
+                                                            <p class="text-sm font-medium text-gray-900 dark:text-white">{{ $message['document_data']['name'] }}</p>
+                                                            <a href="{{ $message['document_data']['url'] }}" 
+                                                               target="_blank"
+                                                               class="text-sm text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                                                                Скачать документ
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @elseif($message['type'] === 'audio' && $message['audio_data'])
+                                                <!-- Аудио -->
+                                                <div class="mb-2">
+                                                    <audio controls class="w-full">
+                                                        <source src="{{ $message['audio_data']['url'] }}" type="audio/mpeg">
+                                                        Ваш браузер не поддерживает аудио.
+                                                    </audio>
+                                                </div>
+                                            @elseif($message['type'] === 'location' && $message['location_data'])
+                                                <!-- Локация -->
+                                                <div class="mb-2 p-3 bg-gray-100 dark:bg-gray-600 rounded-lg">
+                                                    <div class="flex items-center space-x-3">
+                                                        <svg class="h-6 w-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        </svg>
+                                                        <div class="flex-1">
+                                                            <p class="text-sm font-medium text-gray-900 dark:text-white">
+                                                                {{ $message['location_data']['address'] ?? 'Локация' }}
+                                                            </p>
+                                                            <a href="https://maps.google.com/?q={{ $message['location_data']['latitude'] }},{{ $message['location_data']['longitude'] }}" 
+                                                               target="_blank"
+                                                               class="text-sm text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300">
+                                                                Открыть на карте
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                            @if($message['content'] && $message['content'] !== 'Изображение' && $message['content'] !== 'Видео' && $message['content'] !== 'Стикер' && $message['content'] !== 'Аудио сообщение')
+                                                <p class="text-sm text-gray-900 dark:text-white whitespace-pre-line">{{ $message['content'] }}</p>
+                                            @endif
                                         </div>
-                                        <!-- Кнопка удаления (только для админов) -->
-                                        @if(auth()->user()->hasRole('admin'))
-                                        <button class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-600 focus:outline-none" onclick="deleteMessage({{ $message['id'] }})">
-                                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                            </svg>
-                                        </button>
-                                        @endif
+
                                     </div>
                                 </div>
                             @else
@@ -209,16 +433,86 @@
                                             <p class="text-xs text-gray-500 dark:text-gray-400">{{ \Carbon\Carbon::parse($message['created_at'])->format('H:i') }}</p>
                                         </div>
                                         <div class="bg-blue-500 rounded-lg px-4 py-2 max-w-xs ml-auto">
-                                            <p class="text-sm text-white whitespace-pre-line">{{ $message['content'] }}</p>
+                                            @if($message['type'] === 'image' && $message['image_data'])
+                                                <!-- Изображение -->
+                                                <div class="mb-2">
+                                                    <a href="{{ $message['image_data']['url'] }}" 
+                                                       data-lightbox="chat-images" 
+                                                       data-title="{{ $message['content'] !== 'Изображение' ? $message['content'] : 'Изображение' }}">
+                                                        <img src="{{ $message['image_data']['url'] }}" 
+                                                             alt="Изображение" 
+                                                             class="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity duration-200"
+                                                             style="max-height: 300px;">
+                                                    </a>
+                                                </div>
+                                            @elseif($message['type'] === 'video' && $message['video_data'])
+                                                <!-- Видео -->
+                                                <div class="mb-2">
+                                                    <video controls 
+                                                           class="max-w-full h-auto rounded-lg"
+                                                           style="max-height: 300px;">
+                                                        <source src="{{ $message['video_data']['url'] }}" type="video/{{ $message['video_data']['extension'] }}">
+                                                        Ваш браузер не поддерживает видео.
+                                                    </video>
+                                                </div>
+                                            @elseif($message['type'] === 'sticker' && $message['sticker_data'])
+                                                <!-- Стикер -->
+                                                <div class="mb-2">
+                                                    <img src="{{ $message['sticker_data']['url'] }}" 
+                                                         alt="Стикер" 
+                                                         class="max-w-32 h-auto rounded-lg">
+                                                </div>
+                                            @elseif($message['type'] === 'document' && $message['document_data'])
+                                                <!-- Документ -->
+                                                <div class="mb-2 p-3 bg-blue-400 dark:bg-blue-600 rounded-lg">
+                                                    <div class="flex items-center space-x-3">
+                                                        <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                                        </svg>
+                                                        <div class="flex-1">
+                                                            <p class="text-sm font-medium text-white">{{ $message['document_data']['name'] }}</p>
+                                                            <a href="{{ $message['document_data']['url'] }}" 
+                                                               target="_blank"
+                                                               class="text-sm text-blue-100 hover:text-blue-200">
+                                                                Скачать документ
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @elseif($message['type'] === 'audio' && $message['audio_data'])
+                                                <!-- Аудио -->
+                                                <div class="mb-2">
+                                                    <audio controls class="w-full">
+                                                        <source src="{{ $message['audio_data']['url'] }}" type="audio/mpeg">
+                                                        Ваш браузер не поддерживает аудио.
+                                                    </audio>
+                                                </div>
+                                            @elseif($message['type'] === 'location' && $message['location_data'])
+                                                <!-- Локация -->
+                                                <div class="mb-2 p-3 bg-blue-400 dark:bg-blue-600 rounded-lg">
+                                                    <div class="flex items-center space-x-3">
+                                                        <svg class="h-6 w-6 text-red-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        </svg>
+                                                        <div class="flex-1">
+                                                            <p class="text-sm font-medium text-white">
+                                                                {{ $message['location_data']['address'] ?? 'Локация' }}
+                                                            </p>
+                                                            <a href="https://maps.google.com/?q={{ $message['location_data']['latitude'] }},{{ $message['location_data']['longitude'] }}" 
+                                                               target="_blank"
+                                                               class="text-sm text-blue-100 hover:text-blue-200">
+                                                                Открыть на карте
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            @endif
+                                            @if($message['content'] && $message['content'] !== 'Изображение' && $message['content'] !== 'Видео' && $message['content'] !== 'Стикер' && $message['content'] !== 'Аудио сообщение')
+                                                <p class="text-sm text-white whitespace-pre-line">{{ $message['content'] }}</p>
+                                            @endif
                                         </div>
-                                        <!-- Кнопка удаления (для своих сообщений или админов) -->
-                                        @if(isset($message['user_id']) && (auth()->user()->id == $message['user_id'] || auth()->user()->hasRole('admin')))
-                                        <button class="absolute -top-2 -left-2 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-600 focus:outline-none" onclick="deleteMessage({{ $message['id'] }})">
-                                            <svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                                            </svg>
-                                        </button>
-                                        @endif
+
                                     </div>
                                     <div class="flex-shrink-0">
                                         <div class="h-8 w-8 bg-red-500 rounded-full flex items-center justify-center">
@@ -250,8 +544,50 @@
                 </div>
 
                 <!-- Поле ввода -->
-                <div class="p-4 border-t border-gray-200 dark:border-gray-700" id="messageInputContainer" style="display: {{ $currentChat ? 'block' : 'none' }};">
+                <div class="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 sticky bottom-0 z-10" id="messageInputContainer" style="display: {{ $currentChat ? 'block' : 'none' }};">
                     <form id="messageForm" class="flex items-center space-x-3">
+                        <!-- Кнопка загрузки изображения -->
+                        <label for="imageUpload" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                        </label>
+                        <input type="file" 
+                               id="imageUpload" 
+                               accept="image/*" 
+                               class="hidden" 
+                               onchange="handleImageUpload(event)">
+                        
+                        <!-- Кнопка загрузки видео -->
+                        <label for="videoUpload" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                        </label>
+                        <input type="file" 
+                               id="videoUpload" 
+                               accept="video/*" 
+                               class="hidden" 
+                               onchange="handleVideoUpload(event)">
+                        
+                        <!-- Кнопка эмодзи -->
+                        <button type="button" 
+                                onclick="toggleEmojiPicker()"
+                                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </button>
+                        
+                        <!-- Кнопка шаблонов ответов -->
+                        <button type="button" 
+                                onclick="toggleTemplatesPicker()"
+                                class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
+                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                        </button>
+                        
                         <button type="button" class="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                             <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -278,14 +614,53 @@
             </div>
         </div>
     </div>
-    </div>
 
     <!-- Модальное окно для создания чата -->
-    <div id="addChatModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-50 flex items-center justify-center">
+    <div id="addChatModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-[9999] flex items-center justify-center modal-overlay">
+        <div class="relative mx-auto p-6 border w-96 max-w-md shadow-xl rounded-lg bg-white dark:bg-gray-800 modal-content">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Начать новый чат</h3>
+                    <button id="closeModalBtn" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form id="createChatForm">
+                    <div class="mb-4">
+                        <label for="clientSelect" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Выберите клиента
+                        </label>
+                        <select id="clientSelect" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent" required>
+                            <option value="">Начните вводить имя или телефон...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="initialMessage" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Начальное сообщение (необязательно)
+                        </label>
+                        <textarea id="initialMessage" rows="3" placeholder="Введите сообщение..." class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"></textarea>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancelBtn" class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+                            Отмена
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                            Создать чат
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
     
     <!-- Модальное окно подтверждения завершения диалога -->
-    <div id="endChatConfirmModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-[9999] flex items-center justify-center" style="z-index: 9999;">
-        <div class="relative mx-auto p-6 border w-96 max-w-md shadow-xl rounded-lg bg-white dark:bg-gray-800">
+    <div id="endChatConfirmModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-[9999] flex items-center justify-center modal-overlay">
+        <div class="relative mx-auto p-6 border w-96 max-w-md shadow-xl rounded-lg bg-white dark:bg-gray-800 modal-content">
             <div class="mt-3">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-medium text-gray-900 dark:text-white">Завершить диалог</h3>
@@ -344,7 +719,7 @@
             </div>
         </div>
     </div>
-        <div class="relative mx-auto p-6 border w-96 max-w-md shadow-xl rounded-lg bg-white dark:bg-gray-800">
+        <div class="relative mx-auto p-6 border w-96 max-w-md shadow-xl rounded-lg bg-white dark:bg-gray-800 modal-content">
             <div class="mt-3">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-medium text-gray-900 dark:text-white">Начать новый чат</h3>
@@ -387,6 +762,8 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM загружен, инициализация элементов');
+            
             const searchInput = document.getElementById('searchInput');
             const chatsList = document.getElementById('chatsList');
             const addChatBtn = document.getElementById('addChatBtn');
@@ -395,6 +772,30 @@
             const cancelBtn = document.getElementById('cancelBtn');
             const createChatForm = document.getElementById('createChatForm');
             const clientSelect = document.getElementById('clientSelect');
+            
+            // Проверяем существование элементов
+            if (!addChatBtn) {
+                console.error('Элемент addChatBtn не найден');
+                return;
+            }
+            if (!addChatModal) {
+                console.error('Элемент addChatModal не найден');
+                return;
+            }
+            if (!clientSelect) {
+                console.error('Элемент clientSelect не найден');
+                return;
+            }
+            
+            console.log('Все элементы найдены успешно');
+            
+            // Проверяем jQuery
+            if (typeof $ === 'undefined') {
+                console.error('jQuery не загружен');
+                return;
+            }
+            console.log('jQuery загружен успешно');
+            
             const messageForm = document.getElementById('messageForm');
             const messageInput = document.getElementById('messageInput');
             const messagesContainer = document.getElementById('messagesContainer');
@@ -502,18 +903,128 @@
                 
                 // Автоматический скролл к последнему сообщению при загрузке
                 setTimeout(() => {
-                    const messagesContainer = document.getElementById('messagesContainer');
-                    if (messagesContainer) {
-                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                    }
+                    scrollToBottomSmooth();
                 }, 100);
             @endif
 
-            // Переменные для автообновления
+            // Переменные для real-time обновлений
             let lastMessageId = null;
-            let autoRefreshInterval = null;
+            let eventSource = null;
+            let reconnectAttempts = 0;
+            const maxReconnectAttempts = 5;
             
-            // Функция для получения новых сообщений
+            // Функция для подключения к SSE
+            function connectToSSE() {
+                if (!currentChatId) {
+                    console.log('currentChatId не установлен');
+                    return;
+                }
+                
+                // Закрываем предыдущее соединение если есть
+                if (eventSource) {
+                    eventSource.close();
+                }
+                
+                console.log('Подключение к SSE для чата:', currentChatId);
+                
+                // Формируем URL для SSE
+                let url = `{{ url('/user/chat/stream') }}/${currentChatId}`;
+                if (lastMessageId) {
+                    url += `?last_message_id=${lastMessageId}`;
+                }
+                
+                eventSource = new EventSource(url);
+                
+                eventSource.onopen = function(event) {
+                    console.log('SSE соединение установлено');
+                    reconnectAttempts = 0;
+                };
+                
+                eventSource.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('Получено SSE событие:', data.type);
+                        
+                        switch (data.type) {
+                            case 'connected':
+                                console.log('Подключен к чату:', data.chat_id);
+                                break;
+                                
+                            case 'new_message':
+                                handleNewMessage(data.message);
+                                break;
+                                
+                            case 'chat_updated':
+                                handleChatUpdate(data.chat);
+                                break;
+                                
+                            case 'ping':
+                                // Просто поддерживаем соединение
+                                break;
+                                
+                            case 'timeout':
+                                console.log('SSE соединение завершено по таймауту');
+                                eventSource.close();
+                                break;
+                                
+                            case 'error':
+                                console.error('SSE ошибка:', data.message);
+                                eventSource.close();
+                                break;
+                        }
+                    } catch (error) {
+                        console.error('Ошибка парсинга SSE данных:', error);
+                    }
+                };
+                
+                eventSource.onerror = function(event) {
+                    console.error('SSE ошибка соединения:', event);
+                    eventSource.close();
+                    
+                    // Попытка переподключения
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        console.log(`Попытка переподключения ${reconnectAttempts}/${maxReconnectAttempts}`);
+                        setTimeout(() => {
+                            connectToSSE();
+                        }, 2000 * reconnectAttempts); // Экспоненциальная задержка
+                    } else {
+                        console.error('Превышено максимальное количество попыток переподключения');
+                        // Fallback на polling
+                        startPolling();
+                    }
+                };
+            }
+            
+            // Обработка нового сообщения
+            function handleNewMessage(message) {
+                const messagesContainer = document.getElementById('messagesContainer');
+                const existingMessage = document.querySelector(`[data-message-id="${message.id}"]`);
+                const tempMessage = document.querySelector(`[data-temp="true"]`);
+                
+                if (!existingMessage && !tempMessage) {
+                    addMessageToInterface(message);
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    console.log('Добавлено новое сообщение через SSE:', message.id, message.sender_name);
+                }
+                
+                lastMessageId = message.id;
+            }
+            
+            // Обработка обновления чата
+            function handleChatUpdate(chat) {
+                console.log('Чат обновлен:', chat);
+                // Здесь можно обновить статус чата, информацию о назначенном менеджере и т.д.
+            }
+            
+            // Fallback на polling если SSE не работает
+            function startPolling() {
+                console.log('Переключение на polling режим');
+                autoRefreshInterval = setInterval(fetchNewMessages, 3000);
+                fetchNewMessages();
+            }
+            
+            // Функция для получения новых сообщений (fallback)
             function fetchNewMessages() {
                 console.log('fetchNewMessages вызван, currentChatId:', currentChatId, 'lastMessageId:', lastMessageId);
                 if (!currentChatId) {
@@ -547,9 +1058,9 @@
                                 if (!existingMessage && !existingByContent && !tempMessage) {
                                     hasNewMessages = true;
                                     addMessageToInterface(message);
-                                    console.log('Добавлено новое сообщение:', message.id, message.content);
+                                    console.log('Добавлено новое сообщение:', message.id, message.sender_name);
                                 } else {
-                                    console.log('Сообщение уже существует или есть временное:', message.id, message.content);
+                                    console.log('Сообщение уже существует или есть временное:', message.id, message.sender_name);
                                 }
                             });
                             
@@ -577,16 +1088,25 @@
                 let messageHtml = '';
                 
                 if (message.sender_name === 'Система') {
+                    // Убираем sticky с предыдущих системных сообщений
+                    const existingSystemMessages = messagesContainer.querySelectorAll('.system-message');
+                    existingSystemMessages.forEach(msg => {
+                        msg.classList.remove('sticky', 'top-10', 'z-10', 'bg-white', 'dark:bg-gray-900', 'py-2', 'border-b', 'border-gray-200', 'dark:border-gray-600');
+                    });
+                    
                     // Заменяем \n на <br> для правильного отображения переносов строк
                     const formattedContent = message.content.replace(/\n/g, '<br>');
                     messageHtml = `
-                        <div class="flex justify-center mb-4">
-                            <div class="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2 max-w-md">
-                                <p class="text-sm text-gray-600 dark:text-gray-400 text-left">${formattedContent}</p>
+                        <div class="flex justify-center mb-4 sticky top-10 z-10 bg-white dark:bg-gray-900 py-2 border-b border-gray-200 dark:border-gray-600 system-message">
+                            <div class="bg-gray-100 dark:bg-blue-900/30 rounded-lg px-4 py-2 max-w-md border border-gray-200 dark:border-blue-500/30 shadow-sm">
+                                <div class="flex items-center space-x-2 mb-1">
+                                    <svg class="h-4 w-4 text-blue-500 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    <p class="text-xs text-gray-500 dark:text-blue-300">${currentTime}</p>
+                                </div>
+                                <p class="text-sm text-gray-600 dark:text-blue-200 text-left">${formattedContent}</p>
                             </div>
-                        </div>
-                        <div class="flex justify-center items-center space-x-2 mb-4">
-                            <p class="text-xs text-gray-500 dark:text-gray-400">${currentTime}</p>
                         </div>
                     `;
                 } else if (message.is_from_client) {
@@ -639,21 +1159,24 @@
                 }, 50);
             }
             
-            // Функция для запуска автообновления
+            // Функция для запуска real-time обновлений
             function startAutoRefresh() {
-                if (autoRefreshInterval) {
-                    clearInterval(autoRefreshInterval);
-                }
+                // Останавливаем предыдущие соединения
+                stopAutoRefresh();
                 
-                // Получаем сообщения каждые 3 секунды
-                autoRefreshInterval = setInterval(fetchNewMessages, 3000);
-                
-                // Первоначальная загрузка
-                fetchNewMessages();
+                // Пытаемся подключиться к SSE
+                connectToSSE();
             }
             
-            // Функция для остановки автообновления
+            // Функция для остановки real-time обновлений
             function stopAutoRefresh() {
+                // Закрываем SSE соединение
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+                
+                // Останавливаем polling если он запущен
                 if (autoRefreshInterval) {
                     clearInterval(autoRefreshInterval);
                     autoRefreshInterval = null;
@@ -701,7 +1224,7 @@
                     lastMessageId = {{ $currentMessages->last()['id'] }};
                     console.log('Установлен lastMessageId:', lastMessageId);
                 @endif
-                // startAutoRefresh(); // Временно отключено автообновление
+                startAutoRefresh(); // Запускаем real-time обновления
             @else
                 console.log('Текущий чат не найден');
             @endif
@@ -727,32 +1250,17 @@
                 // Очищаем поле ввода
                 messageInput.value = '';
                 
-                // Добавляем сообщение в интерфейс сразу (временное)
-                const tempMessageId = 'temp_' + Date.now();
-                const currentTime = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-                
-                const tempMessageHtml = `
-                    <div class="flex items-start space-x-3 justify-end" data-message-id="${tempMessageId}" data-temp="true">
-                        <div class="flex-1">
-                            <!-- Имя автора сверху -->
-                            <div class="flex items-center space-x-2 mb-1 justify-end">
-                                <p class="text-sm font-bold text-gray-900 dark:text-white">{{ auth()->user()->name }}</p>
-                                <p class="text-xs text-gray-500 dark:text-gray-400">${currentTime}</p>
-                            </div>
-                            <div class="bg-blue-500 rounded-lg px-4 py-2 max-w-xs ml-auto">
-                                <p class="text-sm text-white whitespace-pre-line">${content}</p>
-                            </div>
-                        </div>
-                        <div class="flex-shrink-0">
-                            <div class="h-8 w-8 bg-red-500 rounded-full flex items-center justify-center">
-                                <span class="text-xs font-medium text-white">{{ strtoupper(substr(auth()->user()->name, 0, 1)) }}</span>
-                            </div>
-                        </div>
+                // Показываем индикатор отправки
+                const sendingIndicator = document.createElement('div');
+                sendingIndicator.className = 'flex items-center justify-end space-x-2 mb-2';
+                sendingIndicator.innerHTML = `
+                    <div class="flex items-center space-x-2 text-gray-500 text-sm">
+                        <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500"></div>
+                        <span>Отправка...</span>
                     </div>
                 `;
-                
-                messagesContainer.insertAdjacentHTML('beforeend', tempMessageHtml);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                messagesContainer.appendChild(sendingIndicator);
+                scrollToBottomSmooth();
                 
                 // Отправляем сообщение на сервер
                 fetch(`{{ url('/user/chat/send') }}/${currentChatId}`, {
@@ -769,45 +1277,30 @@
                 })
                 .then(data => {
                     console.log('Данные ответа:', data);
+                    // Удаляем индикатор отправки
+                    if (sendingIndicator && sendingIndicator.parentNode) {
+                        sendingIndicator.remove();
+                    }
+                    
                     if (!data.success) {
                         console.error('Ошибка отправки сообщения:', data.error || data.message);
                         alert('Ошибка отправки сообщения: ' + (data.error || data.message));
-                        // Удаляем временное сообщение при ошибке
-                        const tempMessage = document.querySelector(`[data-message-id="${tempMessageId}"]`);
-                        if (tempMessage) {
-                            tempMessage.nextElementSibling.remove();
-                            tempMessage.remove();
-                        }
+                        // Возвращаем текст в поле ввода при ошибке
+                        messageInput.value = content;
                     } else {
                         console.log('Сообщение отправлено успешно');
-                        // Удаляем временное сообщение и заменяем на реальное
-                        const tempMessage = document.querySelector(`[data-message-id="${tempMessageId}"]`);
-                        if (tempMessage) {
-                            tempMessage.nextElementSibling.remove();
-                            tempMessage.remove();
-                        }
-                        // Добавляем реальное сообщение
-                        addMessageToInterface({
-                            id: data.message.id,
-                            content: data.message.content,
-                            created_at: data.message.created_at,
-                            is_from_client: false,
-                            sender_name: data.message.sender_name,
-                            sender_avatar: data.message.sender_avatar,
-                            type: data.message.type,
-                            user_id: data.message.user_id
-                        });
+                        // SSE получит реальное сообщение и добавит его в интерфейс
                     }
                 })
                 .catch(error => {
                     console.error('Ошибка отправки сообщения:', error);
                     alert('Ошибка отправки сообщения: ' + error.message);
-                    // Удаляем временное сообщение при ошибке
-                    const tempMessage = document.querySelector(`[data-message-id="${tempMessageId}"]`);
-                    if (tempMessage) {
-                        tempMessage.nextElementSibling.remove();
-                        tempMessage.remove();
+                    // Удаляем индикатор отправки при ошибке
+                    if (sendingIndicator && sendingIndicator.parentNode) {
+                        sendingIndicator.remove();
                     }
+                    // Возвращаем текст в поле ввода при ошибке
+                    messageInput.value = content;
                 });
             });
 
@@ -829,52 +1322,47 @@
 
             // Открытие модального окна
             addChatBtn.addEventListener('click', function() {
+                console.log('Кнопка добавления чата нажата');
                 openModal();
                 // Инициализируем Select2 после открытия модального окна
                 setTimeout(() => {
                     if (!window.clientSelect2) {
-                        window.clientSelect2 = $(clientSelect).select2({
-                            placeholder: 'Начните вводить имя или телефон...',
-                            allowClear: true,
-                            ajax: {
-                                url: '{{ route("user.chat.search-clients") }}',
-                                dataType: 'json',
-                                type: 'GET',
-                                delay: 250,
-                                data: function(params) {
-                                    return {
-                                        q: params.term,
-                                        page: params.page
-                                    };
-                                },
-                                processResults: function(data, params) {
-                                    params.page = params.page || 1;
-                                    return {
-                                        results: data.results || data,
-                                        pagination: {
-                                            more: false
-                                        }
-                                    };
-                                },
-                                cache: true
-                            },
-                            minimumInputLength: 2,
-                            templateResult: function(data) {
-                                if (data.loading) return data.text;
-                                return $(`<div class="flex items-center">
-                                    <div class="flex-1">
-                                        <div class="font-medium">${data.name}</div>
-                                        <div class="text-sm text-gray-500">${data.phone}</div>
-                                    </div>
-                                </div>`);
-                            },
-                            templateSelection: function(data) {
-                                if (data.id) {
-                                    return data.name + ' (' + data.phone + ')';
+                        console.log('Инициализация Select2');
+                        try {
+                            window.clientSelect2 = $(clientSelect).select2({
+                                placeholder: 'Начните вводить имя или телефон...',
+                                allowClear: true,
+                                ajax: {
+                                    url: '{{ route("user.chat.search-clients") }}',
+                                    dataType: 'json',
+                                    type: 'GET',
+                                    delay: 250,
+                                    data: function(params) {
+                                        return {
+                                            q: params.term,
+                                            page: params.page
+                                        };
+                                    },
+                                    processResults: function(data, params) {
+                                        params.page = params.page || 1;
+                                        return {
+                                            results: data.results || data,
+                                            pagination: {
+                                                more: false
+                                            }
+                                        };
+                                    },
+                                    cache: true,
+                                    error: function(xhr, status, error) {
+                                        console.error('Ошибка AJAX в Select2:', error);
+                                        console.error('Ответ сервера:', xhr.responseText);
+                                    }
                                 }
-                                return data.text;
-                            }
-                        });
+                            });
+                            console.log('Select2 инициализирован успешно');
+                        } catch (error) {
+                            console.error('Ошибка инициализации Select2:', error);
+                        }
                     }
                 }, 100);
             });
@@ -1069,11 +1557,11 @@
         // Функция отображения истории
         function displayHistory(history) {
             const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] modal-overlay';
             modal.id = 'historyModal';
             
             let historyHtml = `
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden modal-content">
                     <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">История чата</h3>
                         <button onclick="closeHistoryModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
@@ -1174,11 +1662,11 @@
             }
 
             const modal = document.createElement('div');
-            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] modal-overlay';
             modal.id = 'transferModal';
             
             let modalHtml = `
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4">
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4 modal-content">
                     <div class="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                         <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Переключить отдел</h3>
                         <button onclick="closeTransferModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
@@ -1357,15 +1845,137 @@
 
         // Функция создания HTML для сообщения
         function createMessageHtml(message) {
-            if (message.sender_name === 'Система') {
-                return `
-                    <div class="flex justify-center mb-4">
-                        <div class="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2 max-w-md">
-                            <p class="text-sm text-gray-600 dark:text-gray-400 text-left">${message.content}</p>
+            let messageContent = '';
+            
+            // Обрабатываем изображения
+            if (message.type === 'image' && message.image_data) {
+                const imageTitle = message.content && message.content !== 'Изображение' ? message.content : 'Изображение';
+                messageContent = `
+                    <div class="mb-2">
+                        <a href="${message.image_data.url}" 
+                           data-lightbox="chat-images" 
+                           data-title="${imageTitle}">
+                            <img src="${message.image_data.url}" 
+                                 alt="Изображение" 
+                                 class="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity duration-200"
+                                 style="max-height: 300px;">
+                        </a>
+                    </div>
+                `;
+            }
+            // Обрабатываем видео
+            else if (message.type === 'video' && message.video_data) {
+                messageContent = `
+                    <div class="mb-2">
+                        <video controls 
+                               class="max-w-full h-auto rounded-lg"
+                               style="max-height: 300px;">
+                            <source src="${message.video_data.url}" type="video/${message.video_data.extension}">
+                            Ваш браузер не поддерживает видео.
+                        </video>
+                    </div>
+                `;
+            }
+            // Обрабатываем стикеры
+            else if (message.type === 'sticker' && message.sticker_data) {
+                messageContent = `
+                    <div class="mb-2">
+                        <img src="${message.sticker_data.url}" 
+                             alt="Стикер" 
+                             class="max-w-32 h-auto rounded-lg">
+                    </div>
+                `;
+            }
+            // Обрабатываем документы
+            else if (message.type === 'document' && message.document_data) {
+                const bgClass = isFromClient ? 'bg-gray-100 dark:bg-gray-600' : 'bg-blue-400 dark:bg-blue-600';
+                const textClass = isFromClient ? 'text-gray-900 dark:text-white' : 'text-white';
+                const linkClass = isFromClient ? 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300' : 'text-blue-100 hover:text-blue-200';
+                
+                messageContent = `
+                    <div class="mb-2 p-3 ${bgClass} rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <svg class="h-8 w-8 ${isFromClient ? 'text-gray-500' : 'text-white'}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium ${textClass}">${message.document_data.name}</p>
+                                <a href="${message.document_data.url}" 
+                                   target="_blank"
+                                   class="text-sm ${linkClass}">
+                                    Скачать документ
+                                </a>
+                            </div>
                         </div>
                     </div>
-                    <div class="flex justify-center items-center space-x-2 mb-4">
-                        <p class="text-xs text-gray-500 dark:text-gray-400">${formatTime(message.created_at)}</p>
+                `;
+            }
+            // Обрабатываем аудио
+            else if (message.type === 'audio' && message.audio_data) {
+                messageContent = `
+                    <div class="mb-2">
+                        <audio controls class="w-full">
+                            <source src="${message.audio_data.url}" type="audio/mpeg">
+                            Ваш браузер не поддерживает аудио.
+                        </audio>
+                    </div>
+                `;
+            }
+            // Обрабатываем локацию
+            else if (message.type === 'location' && message.location_data) {
+                const bgClass = isFromClient ? 'bg-gray-100 dark:bg-gray-600' : 'bg-blue-400 dark:bg-blue-600';
+                const textClass = isFromClient ? 'text-gray-900 dark:text-white' : 'text-white';
+                const linkClass = isFromClient ? 'text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300' : 'text-blue-100 hover:text-blue-200';
+                const iconClass = isFromClient ? 'text-red-500' : 'text-red-200';
+                
+                messageContent = `
+                    <div class="mb-2 p-3 ${bgClass} rounded-lg">
+                        <div class="flex items-center space-x-3">
+                            <svg class="h-6 w-6 ${iconClass}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <div class="flex-1">
+                                <p class="text-sm font-medium ${textClass}">
+                                    ${message.location_data.address || 'Локация'}
+                                </p>
+                                <a href="https://maps.google.com/?q=${message.location_data.latitude},${message.location_data.longitude}" 
+                                   target="_blank"
+                                   class="text-sm ${linkClass}">
+                                    Открыть на карте
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Добавляем текст, если он есть и не равен стандартным сообщениям
+            if (message.content && message.content !== 'Изображение' && message.content !== 'Видео' && message.content !== 'Стикер' && message.content !== 'Аудио сообщение') {
+                messageContent += `<p class="text-sm whitespace-pre-line">${message.content}</p>`;
+            }
+            
+            if (message.sender_name === 'Система') {
+                // Убираем sticky с предыдущих системных сообщений
+                const messagesContainer = document.getElementById('messagesContainer');
+                if (messagesContainer) {
+                    const existingSystemMessages = messagesContainer.querySelectorAll('.system-message');
+                    existingSystemMessages.forEach(msg => {
+                        msg.classList.remove('sticky', 'top-10', 'z-10', 'bg-white', 'dark:bg-gray-900', 'py-2', 'border-b', 'border-gray-200', 'dark:border-gray-600');
+                    });
+                }
+                
+                return `
+                    <div class="flex justify-center mb-4 sticky top-10 z-10 bg-white dark:bg-gray-900 py-2 border-b border-gray-200 dark:border-gray-600 system-message">
+                        <div class="bg-gray-100 dark:bg-blue-900/30 rounded-lg px-4 py-2 max-w-md border border-gray-200 dark:border-blue-500/30 shadow-sm">
+                            <div class="flex items-center space-x-2 mb-1">
+                                <svg class="h-4 w-4 text-blue-500 dark:text-blue-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <p class="text-xs text-gray-500 dark:text-blue-300">${formatTime(message.created_at)}</p>
+                            </div>
+                            <p class="text-sm text-gray-600 dark:text-blue-200 text-left">${message.content}</p>
+                        </div>
                     </div>
                 `;
             } else if (message.is_from_client) {
@@ -1381,8 +1991,8 @@
                                 <p class="text-sm font-bold text-gray-900 dark:text-white">${message.sender_name}</p>
                                 <p class="text-xs text-gray-500 dark:text-gray-400">${formatTime(message.created_at)}</p>
                             </div>
-                            <div class="bg-gray-100 dark:bg-gray-700 rounded-lg px-4 py-2 max-w-md">
-                                <p class="text-sm text-gray-900 dark:text-white">${message.content}</p>
+                            <div class="bg-gray-200 dark:bg-gray-700 rounded-lg px-4 py-2 max-w-xs">
+                                ${messageContent}
                             </div>
                         </div>
                     </div>
@@ -1392,16 +2002,16 @@
                     <div class="flex items-start space-x-3 group mb-4 justify-end" data-message-id="${message.id}" data-message-content="${message.content}" data-message-time="${message.created_at}">
                         <div class="flex-1 relative">
                             <div class="flex items-center space-x-2 mb-1 justify-end">
-                                <p class="text-xs text-gray-500 dark:text-gray-400">${formatTime(message.created_at)}</p>
                                 <p class="text-sm font-bold text-gray-900 dark:text-white">${message.sender_name}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">${formatTime(message.created_at)}</p>
                             </div>
-                            <div class="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-md ml-auto">
-                                <p class="text-sm">${message.content}</p>
+                            <div class="bg-blue-500 rounded-lg px-4 py-2 max-w-xs ml-auto">
+                                ${messageContent}
                             </div>
                         </div>
                         <div class="flex-shrink-0">
-                            <div class="h-8 w-8 bg-blue-500 rounded-full flex items-center justify-center">
-                                <span class="text-xs font-medium text-white">С</span>
+                            <div class="h-8 w-8 bg-red-500 rounded-full flex items-center justify-center">
+                                <span class="text-xs font-medium text-white">М</span>
                             </div>
                         </div>
                     </div>
@@ -1419,6 +2029,15 @@
         function scrollToBottom() {
             const messagesContainer = document.getElementById('messagesContainer');
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // Функция прокрутки к последнему сообщению с учетом sticky элементов
+        function scrollToBottomSmooth() {
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.scrollTo({
+                top: messagesContainer.scrollHeight,
+                behavior: 'smooth'
+            });
         }
 
         // Функция обновления счетчика непрочитанных
@@ -1466,6 +2085,644 @@
                 }
             }
         });
+
+        // Закрытие модального окна загрузки изображения при клике вне его
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadModal = document.getElementById('imageUploadModal');
+            uploadModal.addEventListener('click', function(e) {
+                if (e.target === uploadModal) {
+                    closeImageUploadModal();
+                }
+            });
+
+            // Закрытие модального окна загрузки видео при клике вне его
+            const videoUploadModal = document.getElementById('videoUploadModal');
+            videoUploadModal.addEventListener('click', function(e) {
+                if (e.target === videoUploadModal) {
+                    closeVideoUploadModal();
+                }
+            });
+        });
+
+        // Функция обработки загрузки изображения
+        async function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Проверяем размер файла (максимум 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Размер файла не должен превышать 10MB');
+                return;
+            }
+
+            // Проверяем тип файла
+            if (!file.type.startsWith('image/')) {
+                alert('Пожалуйста, выберите изображение');
+                return;
+            }
+
+            // Показываем модальное окно для ввода подписи
+            showImageUploadModal(file);
+                
+        // Функция обработки загрузки видео
+        async function handleVideoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Проверяем размер файла (максимум 50MB)
+            if (file.size > 50 * 1024 * 1024) {
+                alert('Размер файла не должен превышать 50MB');
+                return;
+            }
+
+            // Проверяем тип файла
+            if (!file.type.startsWith('video/')) {
+                alert('Пожалуйста, выберите видео файл');
+                return;
+            }
+
+            // Показываем модальное окно для ввода подписи
+            showVideoUploadModal(file);
+        }
+
+        // Функция показа модального окна загрузки изображения
+        function showImageUploadModal(file) {
+            const modal = document.getElementById('imageUploadModal');
+            const preview = document.getElementById('imagePreview');
+            const captionInput = document.getElementById('imageCaption');
+            
+            // Показываем превью изображения
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            
+            // Очищаем поле подписи
+            captionInput.value = '';
+            
+            // Сохраняем файл в модальном окне
+            modal.dataset.file = JSON.stringify({
+                name: file.name,
+                size: file.size,
+                type: file.type
+            });
+            
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Функция закрытия модального окна загрузки изображения
+        function closeImageUploadModal() {
+            const modal = document.getElementById('imageUploadModal');
+            modal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            
+            // Очищаем поле ввода файла
+            document.getElementById('imageUpload').value = '';
+        }
+        
+        // Функция показа модального окна загрузки видео
+        function showVideoUploadModal(file) {
+            const modal = document.getElementById('videoUploadModal');
+            const preview = document.getElementById('videoPreview');
+            const captionInput = document.getElementById('videoCaption');
+            
+            // Показываем превью видео
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                preview.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            
+            // Очищаем поле подписи
+            captionInput.value = '';
+            
+            // Сохраняем файл в модальном окне
+            modal.dataset.file = JSON.stringify({
+                name: file.name,
+                size: file.size,
+                type: file.type
+            });
+            
+            modal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        // Функция закрытия модального окна загрузки видео
+        function closeVideoUploadModal() {
+            const modal = document.getElementById('videoUploadModal');
+            modal.classList.add('hidden');
+            document.body.style.overflow = 'auto';
+            
+            // Очищаем поле ввода файла
+            document.getElementById('videoUpload').value = '';
+        }
+
+        // Функция отправки изображения с подписью
+        async function uploadImageWithCaption() {
+            const modal = document.getElementById('imageUploadModal');
+            const captionInput = document.getElementById('imageCaption');
+            const fileInput = document.getElementById('imageUpload');
+            
+            const file = fileInput.files[0];
+            const caption = captionInput.value.trim();
+            
+            if (!file) {
+                alert('Пожалуйста, выберите изображение');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('chat_id', currentChatId);
+            formData.append('caption', caption);
+            formData.append('_token', '{{ csrf_token() }}');
+
+            try {
+                // Показываем индикатор загрузки
+                const uploadBtn = document.getElementById('uploadImageBtn');
+                const originalText = uploadBtn.innerHTML;
+                uploadBtn.innerHTML = '<svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Загрузка...';
+                uploadBtn.disabled = true;
+
+                const response = await fetch('/user/chat/upload-image', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Закрываем модальное окно
+                    closeImageUploadModal();
+                    
+                    // Обновляем чат для отображения нового изображения
+                    await updateChat();
+                } else {
+                    alert('Ошибка загрузки изображения: ' + (result.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки изображения:', error);
+                alert('Ошибка загрузки изображения');
+            } finally {
+                // Восстанавливаем кнопку
+                const uploadBtn = document.getElementById('uploadImageBtn');
+                uploadBtn.innerHTML = originalText;
+                uploadBtn.disabled = false;
+            }
+        }
+        
+        // Функция отправки видео с подписью
+        async function uploadVideoWithCaption() {
+            const modal = document.getElementById('videoUploadModal');
+            const captionInput = document.getElementById('videoCaption');
+            const fileInput = document.getElementById('videoUpload');
+            
+            const file = fileInput.files[0];
+            const caption = captionInput.value.trim();
+            
+            if (!file) {
+                alert('Пожалуйста, выберите видео');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('video', file);
+            formData.append('chat_id', currentChatId);
+            formData.append('caption', caption);
+            formData.append('_token', '{{ csrf_token() }}');
+
+            try {
+                // Показываем индикатор загрузки
+                const uploadBtn = document.getElementById('uploadVideoBtn');
+                const originalText = uploadBtn.innerHTML;
+                uploadBtn.innerHTML = '<svg class="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Загрузка...';
+                uploadBtn.disabled = true;
+
+                const response = await fetch('/user/chat/upload-video', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Закрываем модальное окно
+                    closeVideoUploadModal();
+                    
+                    // Обновляем чат для отображения нового видео
+                    await updateChat();
+                } else {
+                    alert('Ошибка загрузки видео: ' + (result.error || 'Неизвестная ошибка'));
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки видео:', error);
+                alert('Ошибка загрузки видео');
+            } finally {
+                // Восстанавливаем кнопку
+                const uploadBtn = document.getElementById('uploadVideoBtn');
+                uploadBtn.innerHTML = originalText;
+                uploadBtn.disabled = false;
+            }
+        }
+        
+        // Функция переключения пикера эмодзи
+        function toggleEmojiPicker() {
+            const picker = document.getElementById('emojiPicker');
+            if (picker.classList.contains('hidden')) {
+                picker.classList.remove('hidden');
+            } else {
+                picker.classList.add('hidden');
+            }
+        }
+        
+        // Функция вставки эмодзи
+        function insertEmoji(emoji) {
+            const messageInput = document.getElementById('messageInput');
+            const cursorPos = messageInput.selectionStart;
+            const textBefore = messageInput.value.substring(0, cursorPos);
+            const textAfter = messageInput.value.substring(cursorPos);
+            
+            messageInput.value = textBefore + emoji + textAfter;
+            messageInput.selectionStart = messageInput.selectionEnd = cursorPos + emoji.length;
+            messageInput.focus();
+            
+            // Скрываем пикер
+            document.getElementById('emojiPicker').classList.add('hidden');
+        }
+        
+        // Закрытие пикера эмодзи при клике вне его
+        document.addEventListener('click', function(e) {
+            const picker = document.getElementById('emojiPicker');
+            const emojiButton = document.querySelector('[onclick="toggleEmojiPicker()"]');
+            
+            if (!picker.contains(e.target) && !emojiButton.contains(e.target)) {
+                picker.classList.add('hidden');
+            }
+        });
+        
+        // Функция переключения пикера шаблонов
+        function toggleTemplatesPicker() {
+            const picker = document.getElementById('templatesPicker');
+            if (picker.classList.contains('hidden')) {
+                picker.classList.remove('hidden');
+                loadTemplates('all'); // Загружаем все шаблоны по умолчанию
+            } else {
+                picker.classList.add('hidden');
+            }
+        }
+        
+        // Функция загрузки шаблонов
+        function loadTemplates(category = 'all') {
+            const templatesList = document.getElementById('templatesList');
+            
+            // Показываем индикатор загрузки
+            templatesList.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                    <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Загрузка шаблонов...</p>
+                </div>
+            `;
+            
+            // Загружаем шаблоны с сервера
+            fetch(`/admin/response-templates/category/${category}`)
+                .then(response => response.json())
+                .then(templates => {
+                    if (templates.length === 0) {
+                        templatesList.innerHTML = `
+                            <div class="text-center py-4">
+                                <p class="text-sm text-gray-500 dark:text-gray-400">В этой категории нет шаблонов</p>
+                            </div>
+                        `;
+                    } else {
+                        let templatesHtml = '';
+                        templates.forEach(template => {
+                            templatesHtml += `
+                                <div class="template-item p-3 border border-gray-200 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer transition-colors"
+                                     onclick="insertTemplate('${template.id}', '${template.content.replace(/'/g, "\\'")}')">
+                                    <div class="flex items-start justify-between mb-2">
+                                        <h4 class="text-sm font-medium text-gray-900 dark:text-white">${template.name}</h4>
+                                        <button onclick="event.stopPropagation(); copyTemplate('${template.id}', '${template.content.replace(/'/g, "\\'")}')" 
+                                                class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs">
+                                            Копировать
+                                        </button>
+                                    </div>
+                                    <p class="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">${template.content}</p>
+                                </div>
+                            `;
+                        });
+                        templatesList.innerHTML = templatesHtml;
+                    }
+                })
+                .catch(error => {
+                    console.error('Ошибка загрузки шаблонов:', error);
+                    templatesList.innerHTML = `
+                        <div class="text-center py-4">
+                            <p class="text-sm text-red-500">Ошибка загрузки шаблонов</p>
+                        </div>
+                    `;
+                });
+        }
+        
+        // Функция фильтрации шаблонов
+        function filterTemplates(category) {
+            // Обновляем активную кнопку
+            document.querySelectorAll('.template-filter-btn').forEach(btn => {
+                btn.classList.remove('bg-blue-100', 'text-blue-800', 'dark:bg-blue-900', 'dark:text-blue-200');
+                btn.classList.add('bg-gray-100', 'text-gray-800', 'dark:bg-gray-700', 'dark:text-gray-200');
+            });
+            
+            event.target.classList.remove('bg-gray-100', 'text-gray-800', 'dark:bg-gray-700', 'dark:text-gray-200');
+            event.target.classList.add('bg-blue-100', 'text-blue-800', 'dark:bg-blue-900', 'dark:text-blue-200');
+            
+            // Загружаем шаблоны для выбранной категории
+            loadTemplates(category);
+        }
+        
+        // Функция вставки шаблона
+        function insertTemplate(templateId, content) {
+            const messageInput = document.getElementById('messageInput');
+            const cursorPos = messageInput.selectionStart;
+            const textBefore = messageInput.value.substring(0, cursorPos);
+            const textAfter = messageInput.value.substring(cursorPos);
+            
+            messageInput.value = textBefore + content + textAfter;
+            messageInput.selectionStart = messageInput.selectionEnd = cursorPos + content.length;
+            messageInput.focus();
+            
+            // Скрываем пикер
+            document.getElementById('templatesPicker').classList.add('hidden');
+            
+            // Увеличиваем счетчик использований
+            fetch(`/admin/response-templates/${templateId}/increment-usage`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Content-Type': 'application/json',
+                }
+            });
+        }
+        
+        // Закрытие пикера шаблонов при клике вне его
+        document.addEventListener('click', function(e) {
+            const picker = document.getElementById('templatesPicker');
+            const templatesButton = document.querySelector('[onclick="toggleTemplatesPicker()"]');
+            
+            if (!picker.contains(e.target) && !templatesButton.contains(e.target)) {
+                picker.classList.add('hidden');
+            }
+        });
     </script>
+
+
+
+    <!-- Модальное окно для загрузки изображения с подписью -->
+    <div id="imageUploadModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-[9999] flex items-center justify-center modal-overlay">
+        <div class="relative mx-auto p-6 border w-96 max-w-md shadow-xl rounded-lg bg-white dark:bg-gray-800 modal-content">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Загрузить изображение</h3>
+                    <button onclick="closeImageUploadModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Превью изображения -->
+                <div class="mb-4">
+                    <img id="imagePreview" src="" alt="Превью" class="w-full h-48 object-cover rounded-lg border border-gray-300 dark:border-gray-600">
+                </div>
+                
+                <!-- Поле для подписи -->
+                <div class="mb-4">
+                    <label for="imageCaption" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Подпись к изображению (необязательно)
+                    </label>
+                    <textarea id="imageCaption" 
+                              rows="3"
+                              placeholder="Введите подпись к изображению..."
+                              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"></textarea>
+                </div>
+                
+                <!-- Кнопки -->
+                <div class="flex justify-end space-x-3">
+                    <button onclick="closeImageUploadModal()" 
+                            class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+                        Отмена
+                    </button>
+                    <button id="uploadImageBtn"
+                            onclick="uploadImageWithCaption()" 
+                            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center space-x-2">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <span>Загрузить</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для загрузки видео с подписью -->
+    <div id="videoUploadModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden z-[9999] flex items-center justify-center modal-overlay">
+        <div class="relative mx-auto p-6 border w-96 max-w-md shadow-xl rounded-lg bg-white dark:bg-gray-800 modal-content">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900 dark:text-white">Загрузить видео</h3>
+                    <button onclick="closeVideoUploadModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Превью видео -->
+                <div class="mb-4">
+                    <video id="videoPreview" controls class="w-full h-48 object-cover rounded-lg border border-gray-300 dark:border-gray-600">
+                        Ваш браузер не поддерживает видео.
+                    </video>
+                </div>
+                
+                <!-- Поле для подписи -->
+                <div class="mb-4">
+                    <label for="videoCaption" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Подпись к видео (необязательно)
+                    </label>
+                    <textarea id="videoCaption" 
+                              rows="3"
+                              placeholder="Введите подпись к видео..."
+                              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"></textarea>
+                </div>
+                
+                <!-- Кнопки -->
+                <div class="flex justify-end space-x-3">
+                    <button onclick="closeVideoUploadModal()" 
+                            class="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-600 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors">
+                        Отмена
+                    </button>
+                    <button id="uploadVideoBtn"
+                            onclick="uploadVideoWithCaption()" 
+                            class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 active:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 transform hover:scale-105 active:scale-95 flex items-center space-x-2">
+                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <span>Загрузить</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Пикер эмодзи -->
+    <div id="emojiPicker" class="absolute bottom-16 left-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-2 hidden z-[9999]" style="width: 300px;">
+        <div class="grid grid-cols-8 gap-1">
+            <!-- Популярные эмодзи -->
+            <button onclick="insertEmoji('😊')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😊</button>
+            <button onclick="insertEmoji('😂')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😂</button>
+            <button onclick="insertEmoji('❤️')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">❤️</button>
+            <button onclick="insertEmoji('👍')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">👍</button>
+            <button onclick="insertEmoji('👎')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">👎</button>
+            <button onclick="insertEmoji('😍')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😍</button>
+            <button onclick="insertEmoji('😭')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😭</button>
+            <button onclick="insertEmoji('🤔')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🤔</button>
+            
+            <button onclick="insertEmoji('😀')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😀</button>
+            <button onclick="insertEmoji('😃')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😃</button>
+            <button onclick="insertEmoji('😄')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😄</button>
+            <button onclick="insertEmoji('😁')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😁</button>
+            <button onclick="insertEmoji('😅')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😅</button>
+            <button onclick="insertEmoji('😆')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😆</button>
+            <button onclick="insertEmoji('😉')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😉</button>
+            <button onclick="insertEmoji('😋')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😋</button>
+            
+            <button onclick="insertEmoji('😎')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😎</button>
+            <button onclick="insertEmoji('😍')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😍</button>
+            <button onclick="insertEmoji('😘')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😘</button>
+            <button onclick="insertEmoji('😗')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😗</button>
+            <button onclick="insertEmoji('😙')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😙</button>
+            <button onclick="insertEmoji('😚')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😚</button>
+            <button onclick="insertEmoji('🙂')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🙂</button>
+            <button onclick="insertEmoji('🤗')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🤗</button>
+            <button onclick="insertEmoji('🤔')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🤔</button>
+            
+            <button onclick="insertEmoji('😐')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😐</button>
+            <button onclick="insertEmoji('😑')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😑</button>
+            <button onclick="insertEmoji('😶')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😶</button>
+            <button onclick="insertEmoji('🙄')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🙄</button>
+            <button onclick="insertEmoji('😏')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😏</button>
+            <button onclick="insertEmoji('😣')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😣</button>
+            <button onclick="insertEmoji('😥')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😥</button>
+            <button onclick="insertEmoji('😮')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😮</button>
+            
+            <button onclick="insertEmoji('😯')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😯</button>
+            <button onclick="insertEmoji('😪')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😪</button>
+            <button onclick="insertEmoji('😫')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😫</button>
+            <button onclick="insertEmoji('😴')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😴</button>
+            <button onclick="insertEmoji('😌')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😌</button>
+            <button onclick="insertEmoji('😛')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😛</button>
+            <button onclick="insertEmoji('😜')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😜</button>
+            <button onclick="insertEmoji('😝')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😝</button>
+            
+            <button onclick="insertEmoji('😒')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😒</button>
+            <button onclick="insertEmoji('😓')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😓</button>
+            <button onclick="insertEmoji('😔')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😔</button>
+            <button onclick="insertEmoji('😕')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😕</button>
+            <button onclick="insertEmoji('🙃')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🙃</button>
+            <button onclick="insertEmoji('🤑')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🤑</button>
+            <button onclick="insertEmoji('😲')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😲</button>
+            <button onclick="insertEmoji('😷')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😷</button>
+            
+            <button onclick="insertEmoji('🤒')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🤒</button>
+            <button onclick="insertEmoji('🤕')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🤕</button>
+            <button onclick="insertEmoji('🤢')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🤢</button>
+            <button onclick="insertEmoji('🤧')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">🤧</button>
+            <button onclick="insertEmoji('😈')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">😈</button>
+            <button onclick="insertEmoji('👿')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">👿</button>
+            <button onclick="insertEmoji('👹')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">👹</button>
+            <button onclick="insertEmoji('👺')" class="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-2xl">👺</button>
+        </div>
+    </div>
+
+    <!-- Пикер шаблонов ответов -->
+    <div id="templatesPicker" class="absolute bottom-16 left-4 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg p-4 hidden z-[9999]" style="width: 400px; max-height: 500px; overflow-y: auto;">
+        <div class="mb-4">
+            <h3 class="text-lg font-medium text-gray-900 dark:text-white mb-2">Шаблоны ответов</h3>
+            <div class="flex flex-wrap gap-2 mb-3">
+                <button onclick="filterTemplates('all')" 
+                        class="template-filter-btn px-2 py-1 text-xs font-medium rounded bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                        data-category="all">
+                    Все
+                </button>
+                <button onclick="filterTemplates('greeting')" 
+                        class="template-filter-btn px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        data-category="greeting">
+                    Приветствие
+                </button>
+                <button onclick="filterTemplates('help')" 
+                        class="template-filter-btn px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        data-category="help">
+                    Помощь
+                </button>
+                <button onclick="filterTemplates('support')" 
+                        class="template-filter-btn px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        data-category="support">
+                    Поддержка
+                </button>
+                <button onclick="filterTemplates('information')" 
+                        class="template-filter-btn px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        data-category="information">
+                    Информация
+                </button>
+                <button onclick="filterTemplates('general')" 
+                        class="template-filter-btn px-2 py-1 text-xs font-medium rounded bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        data-category="general">
+                    Общие
+                </button>
+            </div>
+        </div>
+        
+        <div id="templatesList" class="space-y-2">
+            <!-- Шаблоны будут загружены динамически -->
+            <div class="text-center py-4">
+                <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+                <p class="text-sm text-gray-500 dark:text-gray-400 mt-2">Загрузка шаблонов...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Подключаем Lightbox2 JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lightbox2/2.11.4/js/lightbox.min.js"></script>
+    
+    <!-- Инициализация Lightbox2 -->
+    <script>
+        // Инициализация Lightbox2 с кастомными настройками
+        lightbox.option({
+            'resizeDuration': 200,
+            'wrapAround': true,
+            'albumLabel': 'Изображение %1 из %2',
+            'fadeDuration': 300,
+            'imageFadeDuration': 300,
+            'positionFromTop': 50
+        });
+    </script>
+
     @endsection
+
+<style>
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+</style>
 </x-navigation.app>

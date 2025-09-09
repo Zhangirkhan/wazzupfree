@@ -268,6 +268,40 @@
                         <?php endif; ?>
                     <?php endif; ?>
 
+                    <!-- Группа Мессенджер для админов -->
+                    <?php if(auth()->user()->role === 'admin'): ?>
+                        <li>
+                            <div class="text-xs font-semibold leading-6 text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+                                Мессенджер
+                            </div>
+                            <ul role="list" class="-mx-2 space-y-1">
+                                <?php if(auth()->user()->hasPermission('settings')): ?>
+                                    <?php if (isset($component)) { $__componentOriginald6ac465da68ef29c651386dfc143c18b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginald6ac465da68ef29c651386dfc143c18b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.navigation.nav-item','data' => ['href' => ''.e(route('admin.response-templates.index')).'','active' => request()->routeIs('admin.response-templates.*'),'icon' => 'M4 6h16M4 10h16M4 14h16M4 18h16']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('navigation.nav-item'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['href' => ''.e(route('admin.response-templates.index')).'','active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(request()->routeIs('admin.response-templates.*')),'icon' => 'M4 6h16M4 10h16M4 14h16M4 18h16']); ?>
+                                        Шаблоны ответов
+                                     <?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginald6ac465da68ef29c651386dfc143c18b)): ?>
+<?php $attributes = $__attributesOriginald6ac465da68ef29c651386dfc143c18b; ?>
+<?php unset($__attributesOriginald6ac465da68ef29c651386dfc143c18b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginald6ac465da68ef29c651386dfc143c18b)): ?>
+<?php $component = $__componentOriginald6ac465da68ef29c651386dfc143c18b; ?>
+<?php unset($__componentOriginald6ac465da68ef29c651386dfc143c18b); ?>
+<?php endif; ?>
+                                <?php endif; ?>
+                            </ul>
+                        </li>
+                    <?php endif; ?>
+
                     <!-- Клиенты для всех ролей -->
                     <?php if(auth()->user()->hasPermission('clients')): ?>
                         <?php if (isset($component)) { $__componentOriginald6ac465da68ef29c651386dfc143c18b = $component; } ?>

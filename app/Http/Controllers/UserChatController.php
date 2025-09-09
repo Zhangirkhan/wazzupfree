@@ -194,6 +194,51 @@ class UserChatController extends Controller
                         $content = $this->cleanForJson($message->metadata['original_message']);
                     }
 
+                    // Добавляем данные изображения для сообщений типа image
+                    $imageData = null;
+                    $videoData = null;
+                    if ($message->type === 'image' && $message->metadata && isset($message->metadata['image_url'])) {
+                        $imageData = [
+                            'url' => $message->metadata['image_url'],
+                            'path' => $message->metadata['image_path'] ?? null,
+                            'filename' => $message->metadata['image_filename'] ?? null,
+                            'size' => $message->metadata['image_size'] ?? null,
+                            'extension' => $message->metadata['image_extension'] ?? null,
+                            'caption' => $message->metadata['caption'] ?? null
+                        ];
+                    } elseif ($message->type === 'video' && $message->metadata && isset($message->metadata['video_url'])) {
+                        $videoData = [
+                            'url' => $message->metadata['video_url'],
+                            'path' => $message->metadata['video_path'] ?? null,
+                            'filename' => $message->metadata['video_filename'] ?? null,
+                            'size' => $message->metadata['video_size'] ?? null,
+                            'extension' => $message->metadata['video_extension'] ?? null,
+                            'caption' => $message->metadata['caption'] ?? null
+                        ];
+                    } elseif ($message->type === 'sticker' && $message->metadata && isset($message->metadata['sticker_url'])) {
+                        $stickerData = [
+                            'url' => $message->metadata['sticker_url'],
+                            'caption' => $message->metadata['caption'] ?? null
+                        ];
+                    } elseif ($message->type === 'document' && $message->metadata && isset($message->metadata['document_url'])) {
+                        $documentData = [
+                            'url' => $message->metadata['document_url'],
+                            'name' => $message->metadata['document_name'] ?? 'Документ',
+                            'caption' => $message->metadata['caption'] ?? null
+                        ];
+                    } elseif ($message->type === 'audio' && $message->metadata && isset($message->metadata['audio_url'])) {
+                        $audioData = [
+                            'url' => $message->metadata['audio_url'],
+                            'caption' => $message->metadata['caption'] ?? null
+                        ];
+                    } elseif ($message->type === 'location' && $message->metadata && isset($message->metadata['latitude'])) {
+                        $locationData = [
+                            'latitude' => $message->metadata['latitude'],
+                            'longitude' => $message->metadata['longitude'],
+                            'address' => $message->metadata['address'] ?? null
+                        ];
+                    }
+
                     return [
                         'id' => $message->id,
                         'content' => $content,
@@ -202,7 +247,13 @@ class UserChatController extends Controller
                         'sender_name' => $senderName,
                         'sender_avatar' => $senderAvatar,
                         'type' => $message->type,
-                        'metadata' => $message->metadata
+                        'metadata' => $message->metadata,
+                        'image_data' => $imageData,
+                        'video_data' => $videoData,
+                        'sticker_data' => $stickerData ?? null,
+                        'document_data' => $documentData ?? null,
+                        'audio_data' => $audioData ?? null,
+                        'location_data' => $locationData ?? null
                     ];
                 });
             }
@@ -434,6 +485,19 @@ class UserChatController extends Controller
                     ]);
                 }
                 
+                // Добавляем данные изображения для сообщений типа image
+                $imageData = null;
+                if ($message->type === 'image' && $message->metadata && isset($message->metadata['image_url'])) {
+                    $imageData = [
+                        'url' => $message->metadata['image_url'],
+                        'path' => $message->metadata['image_path'] ?? null,
+                        'filename' => $message->metadata['image_filename'] ?? null,
+                        'size' => $message->metadata['image_size'] ?? null,
+                        'extension' => $message->metadata['image_extension'] ?? null,
+                        'caption' => $message->metadata['caption'] ?? null
+                    ];
+                }
+
                 return [
                     'id' => $message->id,
                     'content' => $cleanedContent,
@@ -442,7 +506,8 @@ class UserChatController extends Controller
                     'sender_name' => $senderName,
                     'sender_avatar' => $isFromClient ? 'К' : 'М',
                     'type' => $message->type,
-                    'user_id' => $message->user_id
+                    'user_id' => $message->user_id,
+                    'image_data' => $imageData
                 ];
             });
             
@@ -523,6 +588,9 @@ class UserChatController extends Controller
         // Отправляем сообщение через MessengerService
         $messengerService = app('\App\Services\MessengerService');
         $message = $messengerService->sendManagerMessage($chat, $cleanContent, $user);
+
+        // Обновляем время последней активности чата
+        $chat->update(['last_activity_at' => now()]);
 
         \Log::info('Сообщение создано', ['message_id' => $message->id, 'content' => $message->content]);
 
@@ -748,6 +816,190 @@ class UserChatController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Ошибка удаления сообщения: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Загрузить изображение в чат
+     */
+    public function uploadImage(Request $request)
+    {
+        try {
+            $request->validate([
+                'image' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:10240', // 10MB максимум
+                'chat_id' => 'required|exists:chats,id',
+                'caption' => 'nullable|string|max:1000' // Подпись к изображению
+            ]);
+
+            $user = Auth::user();
+            $chatId = $request->input('chat_id');
+            $chat = Chat::where('is_messenger_chat', true)->findOrFail($chatId);
+
+            // Проверяем доступ к чату
+            if ($user->role !== 'admin' && $chat->department_id !== $user->department_id) {
+                abort(403, 'Доступ запрещен. Этот чат не принадлежит вашему отделу.');
+            }
+
+            // Если пользователь не руководитель, проверяем назначение
+            if ($user->role !== 'admin' && !$this->isManager($user) && $chat->assigned_to !== $user->id) {
+                abort(403, 'Доступ запрещен. Этот чат не назначен вам.');
+            }
+
+            $imageFile = $request->file('image');
+            $caption = $request->input('caption', '');
+            
+            // Используем ImageService для сохранения изображения
+            $imageService = app(\App\Services\ImageService::class);
+            $imageData = $imageService->saveImageFromFile($imageFile, $chatId);
+
+            if (!$imageData) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Ошибка сохранения изображения'
+                ], 500);
+            }
+
+            // Создаем сообщение с изображением
+            $messageContent = !empty($caption) ? $caption : 'Изображение';
+            
+            $message = Message::create([
+                'chat_id' => $chatId,
+                'user_id' => $user->id,
+                'content' => $messageContent,
+                'type' => 'image',
+                'metadata' => [
+                    'image_url' => $imageData['url'],
+                    'image_path' => $imageData['path'],
+                    'image_filename' => $imageData['filename'],
+                    'image_size' => $imageData['size'],
+                    'image_extension' => $imageData['extension'],
+                    'original_name' => $imageData['original_name'],
+                    'caption' => $caption,
+                    'manager_name' => $user->name,
+                    'direction' => 'outgoing'
+                ]
+            ]);
+
+            // Обновляем время последней активности чата
+            $chat->update(['last_activity_at' => now()]);
+
+            \Log::info('Изображение загружено в чат', [
+                'chat_id' => $chatId,
+                'message_id' => $message->id,
+                'user_id' => $user->id,
+                'image_url' => $imageData['url']
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Изображение загружено',
+                'message_id' => $message->id,
+                'image_data' => $imageData
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Ошибка загрузки изображения: ' . $e->getMessage(), [
+                'chat_id' => $request->input('chat_id'),
+                'user_id' => Auth::id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Ошибка загрузки изображения: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    
+    /**
+     * Загрузить видео в чат
+     */
+    public function uploadVideo(Request $request)
+    {
+        try {
+            $request->validate([
+                'video' => 'required|file|mimes:mp4,avi,mov,wmv,flv,webm,mkv,3gp|max:51200', // 50MB максимум
+                'chat_id' => 'required|exists:chats,id',
+                'caption' => 'nullable|string|max:1000' // Подпись к видео
+            ]);
+
+            $user = Auth::user();
+            $chatId = $request->input('chat_id');
+            $chat = Chat::where('is_messenger_chat', true)->findOrFail($chatId);
+
+            // Проверяем доступ к чату
+            if ($user->role !== 'admin' && $chat->department_id !== $user->department_id) {
+                abort(403, 'Доступ запрещен. Этот чат не принадлежит вашему отделу.');
+            }
+
+            // Если пользователь не руководитель, проверяем назначение
+            if ($user->role !== 'admin' && !$this->isManager($user) && $chat->assigned_to !== $user->id) {
+                abort(403, 'Доступ запрещен. Этот чат не назначен вам.');
+            }
+
+            $videoFile = $request->file('video');
+            $caption = $request->input('caption', '');
+            
+            // Используем VideoService для сохранения видео
+            $videoService = app(\App\Services\VideoService::class);
+            $videoData = $videoService->saveVideoFromFile($videoFile, $chatId);
+
+            if (!$videoData) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Ошибка сохранения видео'
+                ], 500);
+            }
+
+            // Создаем сообщение с видео
+            $messageContent = !empty($caption) ? $caption : 'Видео';
+            
+            $message = Message::create([
+                'chat_id' => $chatId,
+                'user_id' => $user->id,
+                'content' => $messageContent,
+                'type' => 'video',
+                'metadata' => [
+                    'video_url' => $videoData['url'],
+                    'video_path' => $videoData['path'],
+                    'video_filename' => $videoData['filename'],
+                    'video_size' => $videoData['size'],
+                    'video_extension' => $videoData['extension'],
+                    'original_name' => $videoData['original_name'],
+                    'caption' => $caption,
+                    'manager_name' => $user->name,
+                    'direction' => 'outgoing'
+                ]
+            ]);
+
+            // Обновляем время последней активности чата
+            $chat->update(['last_activity_at' => now()]);
+
+            \Log::info('Видео загружено в чат', [
+                'chat_id' => $chatId,
+                'message_id' => $message->id,
+                'user_id' => $user->id,
+                'video_url' => $videoData['url']
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Видео загружено',
+                'message_id' => $message->id,
+                'video_data' => $videoData
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('Ошибка загрузки видео: ' . $e->getMessage(), [
+                'chat_id' => $request->input('chat_id'),
+                'user_id' => Auth::id(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Ошибка загрузки видео: ' . $e->getMessage()
             ], 500);
         }
     }

@@ -70,6 +70,13 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/settings/test-wazzup-connection', [SettingsController::class, 'testWazzupConnection'])->name('settings.test-wazzup-connection');
     });
 
+    // Шаблоны ответов - только админы
+    Route::middleware(['permission:settings'])->group(function () {
+        Route::resource('response-templates', \App\Http\Controllers\Admin\ResponseTemplateController::class);
+        Route::get('/response-templates/category/{category}', [\App\Http\Controllers\Admin\ResponseTemplateController::class, 'getByCategory'])->name('response-templates.by-category');
+        Route::post('/response-templates/{responseTemplate}/increment-usage', [\App\Http\Controllers\Admin\ResponseTemplateController::class, 'incrementUsage'])->name('response-templates.increment-usage');
+    });
+
 
 
     // Передача чатов - доступна менеджерам и админам

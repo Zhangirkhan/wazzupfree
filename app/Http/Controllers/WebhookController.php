@@ -327,16 +327,56 @@ class WebhookController extends Controller
         $text = $message['text'] ?? '';
         $messageId = $message['messageId'] ?? null;
         $contactName = $message['contact']['name'] ?? null;
+        $messageType = $message['type'] ?? 'text';
         
         Log::info('Message details:', [
             'phone' => $phone,
             'text' => $text,
             'message_id' => $messageId,
-            'contact_name' => $contactName
+            'contact_name' => $contactName,
+            'type' => $messageType
         ]);
         
-        if (!$phone || $text === null || $text === '') {
-            Log::error('Invalid message data - missing phone or text', [
+        if (!$phone) {
+            Log::error('Invalid message data - missing phone', [
+                'phone' => $phone
+            ]);
+            return false;
+        }
+        
+        // Обрабатываем изображения
+        if ($messageType === 'imageMessage' || $messageType === 'image') {
+            return $this->processImageMessage($message);
+        }
+        
+        // Обрабатываем видео
+        if ($messageType === 'videoMessage' || $messageType === 'video') {
+            return $this->processVideoMessage($message);
+        }
+        
+        // Обрабатываем стикеры
+        if ($messageType === 'stickerMessage' || $messageType === 'sticker') {
+            return $this->processStickerMessage($message);
+        }
+        
+        // Обрабатываем документы
+        if ($messageType === 'documentMessage' || $messageType === 'document') {
+            return $this->processDocumentMessage($message);
+        }
+        
+        // Обрабатываем аудио
+        if ($messageType === 'audioMessage' || $messageType === 'audio') {
+            return $this->processAudioMessage($message);
+        }
+        
+        // Обрабатываем локацию
+        if ($messageType === 'locationMessage' || $messageType === 'location') {
+            return $this->processLocationMessage($message);
+        }
+        
+        // Обрабатываем текстовые сообщения
+        if ($text === null || $text === '') {
+            Log::error('Invalid message data - missing text', [
                 'phone' => $phone,
                 'text' => $text
             ]);
@@ -364,6 +404,467 @@ class WebhookController extends Controller
             
         } catch (\Exception $e) {
             Log::error('Exception processing message', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+    
+    /**
+     * Обработка изображения из Wazzup24
+     */
+    protected function processImageMessage(array $message): bool
+    {
+        try {
+            $phone = $message['chatId'] ?? null;
+            $messageId = $message['messageId'] ?? null;
+            $contactName = $message['contact']['name'] ?? null;
+            
+            // Получаем данные изображения - проверяем разные форматы
+            $imageUrl = null;
+            $caption = '';
+            
+            // Формат 1: contentUri (новый формат Wazzup24)
+            if (isset($message['contentUri'])) {
+                $imageUrl = $message['contentUri'];
+                // В новом формате подпись может быть в поле text
+                $caption = $message['text'] ?? '';
+                Log::info('Found image in contentUri format', [
+                    'contentUri' => $imageUrl,
+                    'caption' => $caption
+                ]);
+            }
+            // Формат 2: imageMessage (старый формат)
+            elseif (isset($message['imageMessage'])) {
+                $imageData = $message['imageMessage'];
+                $imageUrl = $imageData['link'] ?? $imageData['url'] ?? null;
+                $caption = $imageData['caption'] ?? '';
+                Log::info('Found image in imageMessage format', ['imageData' => $imageData]);
+            }
+            // Формат 3: image (альтернативный формат)
+            elseif (isset($message['image'])) {
+                $imageData = $message['image'];
+                $imageUrl = $imageData['link'] ?? $imageData['url'] ?? null;
+                $caption = $imageData['caption'] ?? '';
+                Log::info('Found image in image format', ['imageData' => $imageData]);
+            }
+            
+            if (!$imageUrl) {
+                Log::error('No image URL found in message', [
+                    'message' => $message,
+                    'available_keys' => array_keys($message)
+                ]);
+                return false;
+            }
+            
+            Log::info('Processing image message', [
+                'phone' => $phone,
+                'image_url' => $imageUrl,
+                'caption' => $caption,
+                'message_id' => $messageId
+            ]);
+            
+            // Используем MessengerService для обработки изображения
+            $messengerService = app(\App\Services\MessengerService::class);
+            $result = $messengerService->handleIncomingImage($phone, $imageUrl, $caption, $messageId);
+            
+            if ($result && isset($result['success']) && $result['success']) {
+                Log::info('Image message processed successfully', [
+                    'chat_id' => $result['chat_id'] ?? 'unknown',
+                    'message_id' => $result['message_id'] ?? 'unknown'
+                ]);
+                return true;
+            } else {
+                Log::error('Failed to process image message', [
+                    'error' => $result['error'] ?? 'unknown error',
+                    'result' => $result
+                ]);
+                return false;
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Exception processing image message', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+    
+    /**
+     * Обработка видео из Wazzup24
+     */
+    protected function processVideoMessage(array $message): bool
+    {
+        try {
+            $phone = $message['chatId'] ?? null;
+            $messageId = $message['messageId'] ?? null;
+            $contactName = $message['contact']['name'] ?? null;
+            
+            // Получаем данные видео - проверяем разные форматы
+            $videoUrl = null;
+            $caption = '';
+            
+            // Формат 1: contentUri (новый формат Wazzup24)
+            if (isset($message['contentUri'])) {
+                $videoUrl = $message['contentUri'];
+                // В новом формате подпись может быть в поле text
+                $caption = $message['text'] ?? '';
+                Log::info('Found video in contentUri format', [
+                    'contentUri' => $videoUrl,
+                    'caption' => $caption
+                ]);
+            }
+            // Формат 2: videoMessage (старый формат)
+            elseif (isset($message['videoMessage'])) {
+                $videoData = $message['videoMessage'];
+                $videoUrl = $videoData['link'] ?? $videoData['url'] ?? null;
+                $caption = $videoData['caption'] ?? '';
+                Log::info('Found video in videoMessage format', ['videoData' => $videoData]);
+            }
+            // Формат 3: video (альтернативный формат)
+            elseif (isset($message['video'])) {
+                $videoData = $message['video'];
+                $videoUrl = $videoData['link'] ?? $videoData['url'] ?? null;
+                $caption = $videoData['caption'] ?? '';
+                Log::info('Found video in video format', ['videoData' => $videoData]);
+            }
+            
+            if (!$videoUrl) {
+                Log::error('No video URL found in message', [
+                    'message' => $message,
+                    'available_keys' => array_keys($message)
+                ]);
+                return false;
+            }
+            
+            Log::info('Processing video message', [
+                'phone' => $phone,
+                'video_url' => $videoUrl,
+                'caption' => $caption,
+                'message_id' => $messageId
+            ]);
+            
+            // Используем MessengerService для обработки видео
+            $messengerService = app(\App\Services\MessengerService::class);
+            $result = $messengerService->handleIncomingVideo($phone, $videoUrl, $caption, $messageId);
+            
+            if ($result && isset($result['success']) && $result['success']) {
+                Log::info('Video message processed successfully', [
+                    'chat_id' => $result['chat_id'] ?? 'unknown',
+                    'message_id' => $result['message_id'] ?? 'unknown'
+                ]);
+                return true;
+            } else {
+                Log::error('Failed to process video message', [
+                    'error' => $result['error'] ?? 'unknown error',
+                    'result' => $result
+                ]);
+                return false;
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Exception processing video message', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+    
+    /**
+     * Обработка стикера из Wazzup24
+     */
+    protected function processStickerMessage(array $message): bool
+    {
+        try {
+            $phone = $message['chatId'] ?? null;
+            $messageId = $message['messageId'] ?? null;
+            $contactName = $message['contact']['name'] ?? null;
+            
+            // Получаем данные стикера
+            $stickerUrl = null;
+            $caption = '';
+            
+            // Формат 1: contentUri (новый формат Wazzup24)
+            if (isset($message['contentUri'])) {
+                $stickerUrl = $message['contentUri'];
+                $caption = $message['text'] ?? '';
+                Log::info('Found sticker in contentUri format', [
+                    'contentUri' => $stickerUrl,
+                    'caption' => $caption
+                ]);
+            }
+            // Формат 2: stickerMessage (старый формат)
+            elseif (isset($message['stickerMessage'])) {
+                $stickerData = $message['stickerMessage'];
+                $stickerUrl = $stickerData['link'] ?? $stickerData['url'] ?? null;
+                $caption = $stickerData['caption'] ?? '';
+                Log::info('Found sticker in stickerMessage format', ['stickerData' => $stickerData]);
+            }
+            
+            if (!$stickerUrl) {
+                Log::error('No sticker URL found in message', [
+                    'message' => $message,
+                    'available_keys' => array_keys($message)
+                ]);
+                return false;
+            }
+            
+            Log::info('Processing sticker message', [
+                'phone' => $phone,
+                'sticker_url' => $stickerUrl,
+                'caption' => $caption,
+                'message_id' => $messageId
+            ]);
+            
+            // Используем MessengerService для обработки стикера
+            $messengerService = app(\App\Services\MessengerService::class);
+            $result = $messengerService->handleIncomingSticker($phone, $stickerUrl, $caption, $messageId);
+            
+            if ($result && isset($result['success']) && $result['success']) {
+                Log::info('Sticker message processed successfully', [
+                    'chat_id' => $result['chat_id'] ?? 'unknown',
+                    'message_id' => $result['message_id'] ?? 'unknown'
+                ]);
+                return true;
+            } else {
+                Log::error('Failed to process sticker message', [
+                    'error' => $result['error'] ?? 'unknown error',
+                    'result' => $result
+                ]);
+                return false;
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Exception processing sticker message', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+    
+    /**
+     * Обработка документа из Wazzup24
+     */
+    protected function processDocumentMessage(array $message): bool
+    {
+        try {
+            $phone = $message['chatId'] ?? null;
+            $messageId = $message['messageId'] ?? null;
+            $contactName = $message['contact']['name'] ?? null;
+            
+            // Получаем данные документа
+            $documentUrl = null;
+            $documentName = '';
+            $caption = '';
+            
+            // Формат 1: contentUri (новый формат Wazzup24)
+            if (isset($message['contentUri'])) {
+                $documentUrl = $message['contentUri'];
+                $documentName = $message['documentName'] ?? 'Документ';
+                $caption = $message['text'] ?? '';
+                Log::info('Found document in contentUri format', [
+                    'contentUri' => $documentUrl,
+                    'documentName' => $documentName,
+                    'caption' => $caption
+                ]);
+            }
+            // Формат 2: documentMessage (старый формат)
+            elseif (isset($message['documentMessage'])) {
+                $documentData = $message['documentMessage'];
+                $documentUrl = $documentData['link'] ?? $documentData['url'] ?? null;
+                $documentName = $documentData['filename'] ?? $documentData['name'] ?? 'Документ';
+                $caption = $documentData['caption'] ?? '';
+                Log::info('Found document in documentMessage format', ['documentData' => $documentData]);
+            }
+            
+            if (!$documentUrl) {
+                Log::error('No document URL found in message', [
+                    'message' => $message,
+                    'available_keys' => array_keys($message)
+                ]);
+                return false;
+            }
+            
+            Log::info('Processing document message', [
+                'phone' => $phone,
+                'document_url' => $documentUrl,
+                'document_name' => $documentName,
+                'caption' => $caption,
+                'message_id' => $messageId
+            ]);
+            
+            // Используем MessengerService для обработки документа
+            $messengerService = app(\App\Services\MessengerService::class);
+            $result = $messengerService->handleIncomingDocument($phone, $documentUrl, $documentName, $caption, $messageId);
+            
+            if ($result && isset($result['success']) && $result['success']) {
+                Log::info('Document message processed successfully', [
+                    'chat_id' => $result['chat_id'] ?? 'unknown',
+                    'message_id' => $result['message_id'] ?? 'unknown'
+                ]);
+                return true;
+            } else {
+                Log::error('Failed to process document message', [
+                    'error' => $result['error'] ?? 'unknown error',
+                    'result' => $result
+                ]);
+                return false;
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Exception processing document message', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+    
+    /**
+     * Обработка аудио из Wazzup24
+     */
+    protected function processAudioMessage(array $message): bool
+    {
+        try {
+            $phone = $message['chatId'] ?? null;
+            $messageId = $message['messageId'] ?? null;
+            $contactName = $message['contact']['name'] ?? null;
+            
+            // Получаем данные аудио
+            $audioUrl = null;
+            $caption = '';
+            
+            // Формат 1: contentUri (новый формат Wazzup24)
+            if (isset($message['contentUri'])) {
+                $audioUrl = $message['contentUri'];
+                $caption = $message['text'] ?? '';
+                Log::info('Found audio in contentUri format', [
+                    'contentUri' => $audioUrl,
+                    'caption' => $caption
+                ]);
+            }
+            // Формат 2: audioMessage (старый формат)
+            elseif (isset($message['audioMessage'])) {
+                $audioData = $message['audioMessage'];
+                $audioUrl = $audioData['link'] ?? $audioData['url'] ?? null;
+                $caption = $audioData['caption'] ?? '';
+                Log::info('Found audio in audioMessage format', ['audioData' => $audioData]);
+            }
+            
+            if (!$audioUrl) {
+                Log::error('No audio URL found in message', [
+                    'message' => $message,
+                    'available_keys' => array_keys($message)
+                ]);
+                return false;
+            }
+            
+            Log::info('Processing audio message', [
+                'phone' => $phone,
+                'audio_url' => $audioUrl,
+                'caption' => $caption,
+                'message_id' => $messageId
+            ]);
+            
+            // Используем MessengerService для обработки аудио
+            $messengerService = app(\App\Services\MessengerService::class);
+            $result = $messengerService->handleIncomingAudio($phone, $audioUrl, $caption, $messageId);
+            
+            if ($result && isset($result['success']) && $result['success']) {
+                Log::info('Audio message processed successfully', [
+                    'chat_id' => $result['chat_id'] ?? 'unknown',
+                    'message_id' => $result['message_id'] ?? 'unknown'
+                ]);
+                return true;
+            } else {
+                Log::error('Failed to process audio message', [
+                    'error' => $result['error'] ?? 'unknown error',
+                    'result' => $result
+                ]);
+                return false;
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Exception processing audio message', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return false;
+        }
+    }
+    
+    /**
+     * Обработка локации из Wazzup24
+     */
+    protected function processLocationMessage(array $message): bool
+    {
+        try {
+            $phone = $message['chatId'] ?? null;
+            $messageId = $message['messageId'] ?? null;
+            $contactName = $message['contact']['name'] ?? null;
+            
+            // Получаем данные локации
+            $latitude = null;
+            $longitude = null;
+            $address = '';
+            
+            // Формат 1: locationMessage (новый формат Wazzup24)
+            if (isset($message['locationMessage'])) {
+                $locationData = $message['locationMessage'];
+                $latitude = $locationData['latitude'] ?? null;
+                $longitude = $locationData['longitude'] ?? null;
+                $address = $locationData['address'] ?? $locationData['name'] ?? '';
+                Log::info('Found location in locationMessage format', ['locationData' => $locationData]);
+            }
+            // Формат 2: location (альтернативный формат)
+            elseif (isset($message['location'])) {
+                $locationData = $message['location'];
+                $latitude = $locationData['latitude'] ?? null;
+                $longitude = $locationData['longitude'] ?? null;
+                $address = $locationData['address'] ?? $locationData['name'] ?? '';
+                Log::info('Found location in location format', ['locationData' => $locationData]);
+            }
+            
+            if (!$latitude || !$longitude) {
+                Log::error('No location coordinates found in message', [
+                    'message' => $message,
+                    'available_keys' => array_keys($message)
+                ]);
+                return false;
+            }
+            
+            Log::info('Processing location message', [
+                'phone' => $phone,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'address' => $address,
+                'message_id' => $messageId
+            ]);
+            
+            // Используем MessengerService для обработки локации
+            $messengerService = app(\App\Services\MessengerService::class);
+            $result = $messengerService->handleIncomingLocation($phone, $latitude, $longitude, $address, $messageId);
+            
+            if ($result && isset($result['success']) && $result['success']) {
+                Log::info('Location message processed successfully', [
+                    'chat_id' => $result['chat_id'] ?? 'unknown',
+                    'message_id' => $result['message_id'] ?? 'unknown'
+                ]);
+                return true;
+            } else {
+                Log::error('Failed to process location message', [
+                    'error' => $result['error'] ?? 'unknown error',
+                    'result' => $result
+                ]);
+                return false;
+            }
+            
+        } catch (\Exception $e) {
+            Log::error('Exception processing location message', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);

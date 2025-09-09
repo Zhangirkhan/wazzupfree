@@ -29,11 +29,14 @@ Route::prefix('user/chat')->name('user.chat.')->middleware(['auth'])->group(func
     Route::get('/search-clients', [App\Http\Controllers\UserChatController::class, 'searchClients'])->name('search-clients');
     Route::post('/create', [App\Http\Controllers\UserChatController::class, 'createChat'])->name('create');
     Route::post('/send/{chatId}', [App\Http\Controllers\UserChatController::class, 'sendMessage'])->name('send');
+    Route::post('/upload-image', [App\Http\Controllers\UserChatController::class, 'uploadImage'])->name('upload-image');
+Route::post('/upload-video', [App\Http\Controllers\UserChatController::class, 'uploadVideo'])->name('upload-video');
     Route::get('/messages/{chatId}', [App\Http\Controllers\UserChatController::class, 'getMessages'])->name('messages');
     Route::delete('/messages/{messageId}', [App\Http\Controllers\UserChatController::class, 'deleteMessage'])->name('delete-message');
     Route::post('/end/{chatId}', [App\Http\Controllers\UserChatController::class, 'endChat'])->name('end');
-Route::post('/transfer/{chatId}', [App\Http\Controllers\UserChatController::class, 'transferChat'])->name('transfer');
-Route::get('/history/{chatId}', [App\Http\Controllers\ChatHistoryController::class, 'getHistory'])->name('history');
+    Route::post('/transfer/{chatId}', [App\Http\Controllers\UserChatController::class, 'transferChat'])->name('transfer');
+    Route::get('/history/{chatId}', [App\Http\Controllers\ChatHistoryController::class, 'getHistory'])->name('history');
+    Route::get('/stream/{chatId}', [App\Http\Controllers\ChatSSEController::class, 'stream'])->name('stream');
 });
 
 // User notifications routes

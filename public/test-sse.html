@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест SSE</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .log { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+        button { padding: 10px 20px; margin: 5px; background: #007cba; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #005a87; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+    </style>
+</head>
+<body>
+    <h1>Тест Server-Sent Events для чата</h1>
+    
+    <div>
+        <input type="number" id="chatId" placeholder="ID чата" value="1">
+        <input type="number" id="lastMessageId" placeholder="Последний ID сообщения" value="0">
+        <button onclick="connectSSE()">Подключиться к SSE</button>
+        <button onclick="disconnectSSE()">Отключиться</button>
+    </div>
+    
+    <div>
+        <h3>Статус соединения:</h3>
+        <div id="status" class="log">Не подключено</div>
+    </div>
+    
+    <div>
+        <h3>События:</h3>
+        <div id="events"></div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        const statusDiv = document.getElementById('status');
+        const eventsDiv = document.getElementById('events');
+        
+        function log(message, type = 'log') {
+            const div = document.createElement('div');
+            div.className = `log ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}</strong>: ${message}`;
+            eventsDiv.appendChild(div);
+            eventsDiv.scrollTop = eventsDiv.scrollHeight;
+        }
+        
+        function connectSSE() {
+            const chatId = document.getElementById('chatId').value;
+            const lastMessageId = document.getElementById('lastMessageId').value;
+            
+            if (!chatId) {
+                alert('Введите ID чата');
+                return;
+            }
+            
+            // Закрываем предыдущее соединение
+            if (eventSource) {
+                eventSource.close();
+            }
+            
+            statusDiv.textContent = 'Подключение...';
+            statusDiv.className = 'log';
+            
+            // Формируем URL для SSE
+            let url = `/user/chat/stream/${chatId}`;
+            if (lastMessageId && lastMessageId > 0) {
+                url += `?last_message_id=${lastMessageId}`;
+            }
+            
+            log(`Подключение к: ${url}`, 'log');
+            
+            eventSource = new EventSource(url);
+            
+            eventSource.onopen = function(event) {
+                statusDiv.textContent = 'Подключено';
+                statusDiv.className = 'log success';
+                log('SSE соединение установлено', 'success');
+            };
+            
+            eventSource.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    log(`Получено событие: ${data.type}`, 'success');
+                    log(`Данные: ${JSON.stringify(data, null, 2)}`, 'log');
+                } catch (error) {
+                    log(`Ошибка парсинга: ${error.message}`, 'error');
+                    log(`Сырые данные: ${event.data}`, 'log');
+                }
+            };
+            
+            eventSource.onerror = function(event) {
+                statusDiv.textContent = 'Ошибка соединения';
+                statusDiv.className = 'log error';
+                log('Ошибка SSE соединения', 'error');
+            };
+        }
+        
+        function disconnectSSE() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+                statusDiv.textContent = 'Отключено';
+                statusDiv.className = 'log';
+                log('SSE соединение закрыто', 'log');
+            }
+        }
+        
+        // Автоматическое отключение при закрытии страницы
+        window.addEventListener('beforeunload', function() {
+            disconnectSSE();
+        });
+    </script>
+</body>
+</html>

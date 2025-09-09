@@ -163,6 +163,26 @@
                         @endif
                     @endif
 
+                    <!-- Группа Мессенджер для админов -->
+                    @if(auth()->user()->role === 'admin')
+                        <li>
+                            <div class="text-xs font-semibold leading-6 text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2">
+                                Мессенджер
+                            </div>
+                            <ul role="list" class="-mx-2 space-y-1">
+                                @if(auth()->user()->hasPermission('settings'))
+                                    <x-navigation.nav-item 
+                                        href="{{ route('admin.response-templates.index') }}" 
+                                        :active="request()->routeIs('admin.response-templates.*')"
+                                        icon="M4 6h16M4 10h16M4 14h16M4 18h16"
+                                    >
+                                        Шаблоны ответов
+                                    </x-navigation.nav-item>
+                                @endif
+                            </ul>
+                        </li>
+                    @endif
+
                     <!-- Клиенты для всех ролей -->
                     @if(auth()->user()->hasPermission('clients'))
                         <x-navigation.nav-item 

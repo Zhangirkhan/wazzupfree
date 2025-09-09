@@ -86,12 +86,29 @@
     <script>
         // Initialize theme immediately to prevent flash
         (function() {
-            const darkMode = localStorage.getItem('darkMode') === 'true';
+            const savedTheme = localStorage.getItem('darkMode');
             const htmlElement = document.documentElement;
-            if (darkMode) {
-                htmlElement.classList.add('dark');
+            const isDarkInDOM = htmlElement.classList.contains('dark');
+            
+            console.log('App initialization - savedTheme:', savedTheme, 'isDarkInDOM:', isDarkInDOM);
+            
+            // Приоритет: localStorage > DOM состояние
+            let shouldBeDark = false;
+            if (savedTheme !== null) {
+                shouldBeDark = savedTheme === 'true';
             } else {
+                shouldBeDark = isDarkInDOM;
+                // Сохраняем текущее состояние в localStorage
+                localStorage.setItem('darkMode', shouldBeDark);
+            }
+            
+            // Применяем тему
+            if (shouldBeDark && !isDarkInDOM) {
+                htmlElement.classList.add('dark');
+                console.log('App initialization - dark mode applied');
+            } else if (!shouldBeDark && isDarkInDOM) {
                 htmlElement.classList.remove('dark');
+                console.log('App initialization - light mode applied');
             }
         })();
     </script>

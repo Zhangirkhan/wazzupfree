@@ -64,6 +64,118 @@ class MessengerService
     }
 
     /**
+     * Обработка входящего изображения в мессенджере
+     */
+    public function handleIncomingImage($phone, $imageUrl, $caption = '', $contactData = null)
+    {
+        try {
+            Log::info('Processing image', [
+                'phone' => $phone,
+                'image_url' => $imageUrl,
+                'caption' => $caption
+            ]);
+            
+            // Находим или создаем клиента с контактами
+            $client = $this->findOrCreateClient($phone, $contactData);
+            Log::info('Client found', ['client_id' => $client->id]);
+            
+            // Находим или создаем чат
+            $chat = $this->findOrCreateMessengerChat($phone, $client);
+            $isNewChat = $chat->wasRecentlyCreated;
+            Log::info('Chat found', [
+                'chat_id' => $chat->id, 
+                'status' => $chat->messenger_status
+            ]);
+            
+            // Сохраняем изображение
+            $this->saveClientImage($chat, $imageUrl, $caption, $client);
+            
+            // Если это новый чат, отправляем меню только один раз
+            if ($chat->wasRecentlyCreated) {
+                $this->sendInitialMenu($chat, $client);
+                return [
+                    'success' => true,
+                    'chat_id' => $chat->id,
+                    'message_id' => $chat->messages()->latest()->first()->id ?? null
+                ];
+            }
+            
+            return [
+                'success' => true,
+                'chat_id' => $chat->id,
+                'message_id' => $chat->messages()->latest()->first()->id ?? null
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('Error in handleIncomingImage:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Обработка входящего видео
+     */
+    public function handleIncomingVideo($phone, $videoUrl, $caption = '', $contactData = null)
+    {
+        try {
+            Log::info('Processing video', [
+                'phone' => $phone,
+                'video_url' => $videoUrl,
+                'caption' => $caption
+            ]);
+            
+            // Находим или создаем клиента с контактами
+            $client = $this->findOrCreateClient($phone, $contactData);
+            Log::info('Client found', ['client_id' => $client->id]);
+            
+            // Находим или создаем чат
+            $chat = $this->findOrCreateMessengerChat($phone, $client);
+            $isNewChat = $chat->wasRecentlyCreated;
+            Log::info('Chat found', [
+                'chat_id' => $chat->id, 
+                'status' => $chat->messenger_status
+            ]);
+            
+            // Сохраняем видео
+            $this->saveClientVideo($chat, $videoUrl, $caption, $client);
+            
+            // Если это новый чат, отправляем меню только один раз
+            if ($chat->wasRecentlyCreated) {
+                $this->sendInitialMenu($chat, $client);
+                return [
+                    'success' => true,
+                    'chat_id' => $chat->id,
+                    'message_id' => $chat->messages()->latest()->first()->id ?? null
+                ];
+            }
+            
+            return [
+                'success' => true,
+                'chat_id' => $chat->id,
+                'message_id' => $chat->messages()->latest()->first()->id ?? null
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('Error in handleIncomingVideo:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
      * Обработка сообщения в зависимости от статуса чата
      */
     protected function processMessage($chat, $message, $client)
@@ -345,6 +457,550 @@ class MessengerService
                 'direction' => 'incoming'
             ]
         ]);
+    }
+
+    /**
+     * Сохранение изображения клиента
+     */
+    protected function saveClientImage($chat, $imageUrl, $caption, $client)
+    {
+        try {
+            // Используем ImageService для сохранения изображения
+            $imageService = app(\App\Services\ImageService::class);
+            $imageData = $imageService->saveImageFromUrl($imageUrl, $chat->id);
+            
+            if (!$imageData) {
+                Log::error('Failed to save image', [
+                    'chat_id' => $chat->id,
+                    'image_url' => $imageUrl
+                ]);
+                return;
+            }
+            
+            // Создаем сообщение с изображением
+            $messageContent = !empty($caption) ? $caption : 'Изображение';
+            
+            Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => $client->id,
+                'content' => $messageContent,
+                'type' => 'image',
+                'metadata' => [
+                    'image_url' => $imageData['url'],
+                    'image_path' => $imageData['path'],
+                    'image_filename' => $imageData['filename'],
+                    'image_size' => $imageData['size'],
+                    'image_extension' => $imageData['extension'],
+                    'original_url' => $imageUrl,
+                    'caption' => $caption,
+                    'client_name' => $client->name,
+                    'direction' => 'incoming'
+                ]
+            ]);
+            
+            Log::info('Client image saved successfully', [
+                'chat_id' => $chat->id,
+                'image_url' => $imageData['url'],
+                'caption' => $caption
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error saving client image', [
+                'chat_id' => $chat->id,
+                'image_url' => $imageUrl,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+    
+    /**
+     * Сохранение видео клиента
+     */
+    protected function saveClientVideo($chat, $videoUrl, $caption, $client)
+    {
+        try {
+            // Используем VideoService для сохранения видео
+            $videoService = app(\App\Services\VideoService::class);
+            $videoData = $videoService->saveVideoFromUrl($videoUrl, $chat->id);
+            
+            if (!$videoData) {
+                Log::error('Failed to save video', [
+                    'chat_id' => $chat->id,
+                    'video_url' => $videoUrl
+                ]);
+                return;
+            }
+            
+            // Создаем сообщение с видео
+            $messageContent = !empty($caption) ? $caption : 'Видео';
+            
+            Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => $client->id,
+                'content' => $messageContent,
+                'type' => 'video',
+                'metadata' => [
+                    'video_url' => $videoData['url'],
+                    'video_path' => $videoData['path'],
+                    'video_filename' => $videoData['filename'],
+                    'video_size' => $videoData['size'],
+                    'video_extension' => $videoData['extension'],
+                    'original_url' => $videoUrl,
+                    'caption' => $caption,
+                    'client_name' => $client->id,
+                    'direction' => 'incoming'
+                ]
+            ]);
+            
+            Log::info('Client video saved successfully', [
+                'chat_id' => $chat->id,
+                'video_url' => $videoData['url'],
+                'caption' => $caption
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error saving client video', [
+                'chat_id' => $chat->id,
+                'video_url' => $videoUrl,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+    
+    /**
+     * Обработка входящего стикера
+     */
+    public function handleIncomingSticker($phone, $stickerUrl, $caption = '', $contactData = null)
+    {
+        try {
+            Log::info('Processing sticker', [
+                'phone' => $phone,
+                'sticker_url' => $stickerUrl,
+                'caption' => $caption
+            ]);
+            
+            // Находим или создаем клиента с контактами
+            $client = $this->findOrCreateClient($phone, $contactData);
+            Log::info('Client found', ['client_id' => $client->id]);
+            
+            // Находим или создаем чат
+            $chat = $this->findOrCreateMessengerChat($phone, $client);
+            $isNewChat = $chat->wasRecentlyCreated;
+            Log::info('Chat found', [
+                'chat_id' => $chat->id, 
+                'status' => $chat->messenger_status
+            ]);
+            
+            // Сохраняем стикер
+            $this->saveClientSticker($chat, $stickerUrl, $caption, $client);
+            
+            // Если это новый чат, отправляем меню только один раз
+            if ($chat->wasRecentlyCreated) {
+                $this->sendInitialMenu($chat, $client);
+                return [
+                    'success' => true,
+                    'chat_id' => $chat->id,
+                    'message_id' => $chat->messages()->latest()->first()->id ?? null
+                ];
+            }
+            
+            return [
+                'success' => true,
+                'chat_id' => $chat->id,
+                'message_id' => $chat->messages()->latest()->first()->id ?? null
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('Error in handleIncomingSticker:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Обработка входящего документа
+     */
+    public function handleIncomingDocument($phone, $documentUrl, $documentName, $caption = '', $contactData = null)
+    {
+        try {
+            Log::info('Processing document', [
+                'phone' => $phone,
+                'document_url' => $documentUrl,
+                'document_name' => $documentName,
+                'caption' => $caption
+            ]);
+            
+            // Находим или создаем клиента с контактами
+            $client = $this->findOrCreateClient($phone, $contactData);
+            Log::info('Client found', ['client_id' => $client->id]);
+            
+            // Находим или создаем чат
+            $chat = $this->findOrCreateMessengerChat($phone, $client);
+            $isNewChat = $chat->wasRecentlyCreated;
+            Log::info('Chat found', [
+                'chat_id' => $chat->id, 
+                'status' => $chat->messenger_status
+            ]);
+            
+            // Сохраняем документ
+            $this->saveClientDocument($chat, $documentUrl, $documentName, $caption, $client);
+            
+            // Если это новый чат, отправляем меню только один раз
+            if ($chat->wasRecentlyCreated) {
+                $this->sendInitialMenu($chat, $client);
+                return [
+                    'success' => true,
+                    'chat_id' => $chat->id,
+                    'message_id' => $chat->messages()->latest()->first()->id ?? null
+                ];
+            }
+            
+            return [
+                'success' => true,
+                'chat_id' => $chat->id,
+                'message_id' => $chat->messages()->latest()->first()->id ?? null
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('Error in handleIncomingDocument:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Обработка входящего аудио
+     */
+    public function handleIncomingAudio($phone, $audioUrl, $caption = '', $contactData = null)
+    {
+        try {
+            Log::info('Processing audio', [
+                'phone' => $phone,
+                'audio_url' => $audioUrl,
+                'caption' => $caption
+            ]);
+            
+            // Находим или создаем клиента с контактами
+            $client = $this->findOrCreateClient($phone, $contactData);
+            Log::info('Client found', ['client_id' => $client->id]);
+            
+            // Находим или создаем чат
+            $chat = $this->findOrCreateMessengerChat($phone, $client);
+            $isNewChat = $chat->wasRecentlyCreated;
+            Log::info('Chat found', [
+                'chat_id' => $chat->id, 
+                'status' => $chat->messenger_status
+            ]);
+            
+            // Сохраняем аудио
+            $this->saveClientAudio($chat, $audioUrl, $caption, $client);
+            
+            // Если это новый чат, отправляем меню только один раз
+            if ($chat->wasRecentlyCreated) {
+                $this->sendInitialMenu($chat, $client);
+                return [
+                    'success' => true,
+                    'chat_id' => $chat->id,
+                    'message_id' => $chat->messages()->latest()->first()->id ?? null
+                ];
+            }
+            
+            return [
+                'success' => true,
+                'chat_id' => $chat->id,
+                'message_id' => $chat->messages()->latest()->first()->id ?? null
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('Error in handleIncomingAudio:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+    
+    /**
+     * Обработка входящей локации
+     */
+    public function handleIncomingLocation($phone, $latitude, $longitude, $address = '', $contactData = null)
+    {
+        try {
+            Log::info('Processing location', [
+                'phone' => $phone,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'address' => $address
+            ]);
+            
+            // Находим или создаем клиента с контактами
+            $client = $this->findOrCreateClient($phone, $contactData);
+            Log::info('Client found', ['client_id' => $client->id]);
+            
+            // Находим или создаем чат
+            $chat = $this->findOrCreateMessengerChat($phone, $client);
+            $isNewChat = $chat->wasRecentlyCreated;
+            Log::info('Chat found', [
+                'chat_id' => $chat->id, 
+                'status' => $chat->messenger_status
+            ]);
+            
+            // Сохраняем локацию
+            $this->saveClientLocation($chat, $latitude, $longitude, $address, $client);
+            
+            // Если это новый чат, отправляем меню только один раз
+            if ($chat->wasRecentlyCreated) {
+                $this->sendInitialMenu($chat, $client);
+                return [
+                    'success' => true,
+                    'chat_id' => $chat->id,
+                    'message_id' => $chat->messages()->latest()->first()->id ?? null
+                ];
+            }
+            
+            return [
+                'success' => true,
+                'chat_id' => $chat->id,
+                'message_id' => $chat->messages()->latest()->first()->id ?? null
+            ];
+            
+        } catch (\Exception $e) {
+            Log::error('Error in handleIncomingLocation:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Сохранение стикера клиента
+     */
+    protected function saveClientSticker($chat, $stickerUrl, $caption, $client)
+    {
+        try {
+            // Используем StickerService для сохранения стикера
+            $stickerService = app(\App\Services\StickerService::class);
+            $stickerData = $stickerService->saveStickerFromUrl($stickerUrl, $chat->id);
+            
+            if (!$stickerData) {
+                Log::error('Failed to save sticker', [
+                    'chat_id' => $chat->id,
+                    'sticker_url' => $stickerUrl
+                ]);
+                return;
+            }
+            
+            // Создаем сообщение со стикером
+            $messageContent = !empty($caption) ? $caption : 'Стикер';
+            
+            Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => $client->id,
+                'content' => $messageContent,
+                'type' => 'sticker',
+                'metadata' => [
+                    'sticker_url' => $stickerData['url'],
+                    'sticker_path' => $stickerData['path'],
+                    'sticker_filename' => $stickerData['filename'],
+                    'sticker_size' => $stickerData['size'],
+                    'sticker_extension' => $stickerData['extension'],
+                    'original_url' => $stickerUrl,
+                    'caption' => $caption,
+                    'client_name' => $client->name,
+                    'direction' => 'incoming'
+                ]
+            ]);
+            
+            Log::info('Client sticker saved successfully', [
+                'chat_id' => $chat->id,
+                'sticker_url' => $stickerData['url'],
+                'caption' => $caption
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error saving client sticker', [
+                'chat_id' => $chat->id,
+                'sticker_url' => $stickerUrl,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+    
+    /**
+     * Сохранение документа клиента
+     */
+    protected function saveClientDocument($chat, $documentUrl, $documentName, $caption, $client)
+    {
+        try {
+            // Используем DocumentService для сохранения документа
+            $documentService = app(\App\Services\DocumentService::class);
+            $documentData = $documentService->saveDocumentFromUrl($documentUrl, $chat->id, $documentName);
+            
+            if (!$documentData) {
+                Log::error('Failed to save document', [
+                    'chat_id' => $chat->id,
+                    'document_url' => $documentUrl
+                ]);
+                return;
+            }
+            
+            // Создаем сообщение с документом
+            $messageContent = !empty($caption) ? $caption : $documentName;
+            
+            Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => $client->id,
+                'content' => $messageContent,
+                'type' => 'document',
+                'metadata' => [
+                    'document_url' => $documentData['url'],
+                    'document_path' => $documentData['path'],
+                    'document_filename' => $documentData['filename'],
+                    'document_size' => $documentData['size'],
+                    'document_extension' => $documentData['extension'],
+                    'document_name' => $documentData['original_name'],
+                    'original_url' => $documentUrl,
+                    'caption' => $caption,
+                    'client_name' => $client->name,
+                    'direction' => 'incoming'
+                ]
+            ]);
+            
+            Log::info('Client document saved successfully', [
+                'chat_id' => $chat->id,
+                'document_url' => $documentData['url'],
+                'document_name' => $documentData['original_name'],
+                'caption' => $caption
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error saving client document', [
+                'chat_id' => $chat->id,
+                'document_url' => $documentUrl,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+    
+    /**
+     * Сохранение аудио клиента
+     */
+    protected function saveClientAudio($chat, $audioUrl, $caption, $client)
+    {
+        try {
+            // Используем AudioService для сохранения аудио
+            $audioService = app(\App\Services\AudioService::class);
+            $audioData = $audioService->saveAudioFromUrl($audioUrl, $chat->id);
+            
+            if (!$audioData) {
+                Log::error('Failed to save audio', [
+                    'chat_id' => $chat->id,
+                    'audio_url' => $audioUrl
+                ]);
+                return;
+            }
+            
+            // Создаем сообщение с аудио
+            $messageContent = !empty($caption) ? $caption : 'Аудио сообщение';
+            
+            Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => $client->id,
+                'content' => $messageContent,
+                'type' => 'audio',
+                'metadata' => [
+                    'audio_url' => $audioData['url'],
+                    'audio_path' => $audioData['path'],
+                    'audio_filename' => $audioData['filename'],
+                    'audio_size' => $audioData['size'],
+                    'audio_extension' => $audioData['extension'],
+                    'original_url' => $audioUrl,
+                    'caption' => $caption,
+                    'client_name' => $client->name,
+                    'direction' => 'incoming'
+                ]
+            ]);
+            
+            Log::info('Client audio saved successfully', [
+                'chat_id' => $chat->id,
+                'audio_url' => $audioData['url'],
+                'caption' => $caption
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error saving client audio', [
+                'chat_id' => $chat->id,
+                'audio_url' => $audioUrl,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+    
+    /**
+     * Сохранение локации клиента
+     */
+    protected function saveClientLocation($chat, $latitude, $longitude, $address, $client)
+    {
+        try {
+            // Создаем сообщение с локацией
+            $messageContent = !empty($address) ? $address : "Координаты: {$latitude}, {$longitude}";
+            
+            Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => $client->id,
+                'content' => $messageContent,
+                'type' => 'location',
+                'metadata' => [
+                    'latitude' => $latitude,
+                    'longitude' => $longitude,
+                    'address' => $address,
+                    'client_name' => $client->name,
+                    'direction' => 'incoming'
+                ]
+            ]);
+            
+            Log::info('Client location saved successfully', [
+                'chat_id' => $chat->id,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'address' => $address
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('Error saving client location', [
+                'chat_id' => $chat->id,
+                'latitude' => $latitude,
+                'longitude' => $longitude,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
     }
 
     /**
