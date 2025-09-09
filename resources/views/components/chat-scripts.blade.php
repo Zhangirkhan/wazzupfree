@@ -522,8 +522,10 @@
         }
 
         // Открытие модального окна
-        addChatBtn.addEventListener('click', function() {
-            console.log('Кнопка добавления чата нажата');
+        if (addChatBtn) {
+            console.log('Кнопка добавления чата найдена, добавляем обработчик');
+            addChatBtn.addEventListener('click', function() {
+                console.log('Кнопка добавления чата нажата');
             openModal();
             // Инициализируем Select2 после открытия модального окна
             setTimeout(() => {
@@ -566,21 +568,31 @@
                     }
                 }
             }, 100);
-        });
+            });
+        } else {
+            console.error('Кнопка добавления чата не найдена');
+        }
 
         // Закрытие модального окна
-        closeModalBtn.addEventListener('click', closeModal);
-        cancelBtn.addEventListener('click', closeModal);
+        if (closeModalBtn) {
+            closeModalBtn.addEventListener('click', closeModal);
+        }
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', closeModal);
+        }
 
         // Закрытие по клику вне модального окна
-        addChatModal.addEventListener('click', function(e) {
-            if (e.target === addChatModal) {
-                closeModal();
-            }
-        });
+        if (addChatModal) {
+            addChatModal.addEventListener('click', function(e) {
+                if (e.target === addChatModal) {
+                    closeModal();
+                }
+            });
+        }
 
         // Создание чата
-        createChatForm.addEventListener('submit', function(e) {
+        if (createChatForm) {
+            createChatForm.addEventListener('submit', function(e) {
             e.preventDefault();
             
             const clientId = clientSelect.value;
@@ -626,7 +638,8 @@
                 submitBtn.textContent = originalText;
                 submitBtn.disabled = false;
             });
-        });
+            });
+        }
 
         // Отправка сообщения
         if (messageForm) {
