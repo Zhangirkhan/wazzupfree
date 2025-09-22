@@ -29,7 +29,7 @@ class DepartmentService
 
     public function getDepartment(int $id): ?Department
     {
-        return Department::with('organization')->find($id);
+        return Department::with(['organization', 'leader'])->find($id);
     }
 
     public function createDepartment(array $data): Department
@@ -44,6 +44,8 @@ class DepartmentService
                 'description' => $data['description'] ?? null,
                 'organization_id' => $data['organization_id'],
                 'is_active' => $data['is_active'] ?? true,
+                'show_in_chatbot' => $data['show_in_chatbot'] ?? false,
+                'chatbot_order' => $data['chatbot_order'] ?? 0,
             ]);
 
             Log::info('Department created', [
@@ -52,7 +54,7 @@ class DepartmentService
                 'organization_id' => $department->organization_id
             ]);
 
-            return $department->load('organization');
+            return $department->load(['organization', 'leader']);
         });
     }
 
@@ -72,6 +74,8 @@ class DepartmentService
                 'description' => $data['description'] ?? $department->description,
                 'organization_id' => $data['organization_id'] ?? $department->organization_id,
                 'is_active' => $data['is_active'] ?? $department->is_active,
+                'show_in_chatbot' => $data['show_in_chatbot'] ?? $department->show_in_chatbot,
+                'chatbot_order' => $data['chatbot_order'] ?? $department->chatbot_order,
             ]);
 
             Log::info('Department updated', [
@@ -79,7 +83,7 @@ class DepartmentService
                 'name' => $department->name
             ]);
 
-            return $department->load('organization');
+            return $department->load(['organization', 'leader']);
         });
     }
 

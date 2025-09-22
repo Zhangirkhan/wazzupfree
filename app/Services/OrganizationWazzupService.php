@@ -149,11 +149,13 @@ class OrganizationWazzupService
                 ], $subscriptions)
             ];
 
-            $response = $this->makeRequest('PATCH', '/v3/webhooks', $data);
+            // Wazzup24 может вернуть 204 No Content на PATCH, поэтому сразу после этого запрашиваем текущие настройки
+            $this->makeRequest('PATCH', '/v3/webhooks', $data);
+            $current = $this->makeRequest('GET', '/v3/webhooks');
 
             return [
                 'success' => true,
-                'data' => $response,
+                'data' => $current,
                 'organization_id' => $this->organization->id
             ];
         } catch (\Exception $e) {

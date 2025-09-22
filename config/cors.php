@@ -22,6 +22,7 @@ return [
     'allowed_origins' => [
         'https://back-chat.ap.kz',
         'https://chat.ap.kz',
+        'https://erp.ap.kz',
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'http://localhost:8000',

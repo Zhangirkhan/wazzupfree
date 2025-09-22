@@ -26,10 +26,10 @@ class AdminSeeder extends Seeder
         }
 
         User::updateOrCreate(
-            ['email' => 'admin@chat.ap.kz'],
+            ['email' => 'admin@erp.ap.kz'],
             [
                 'name' => 'Администратор',
-                'email' => 'admin@chat.ap.kz',
+                'email' => 'admin@erp.ap.kz',
                 'password' => Hash::make('password'),
                 'role' => 'admin',
             ]

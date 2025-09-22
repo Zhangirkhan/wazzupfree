@@ -26,10 +26,10 @@ class LeaderSeeder extends Seeder
         }
 
         User::updateOrCreate(
-            ['email' => 'leader@chat.ap.kz'],
+            ['email' => 'leader@erp.ap.kz'],
             [
                 'name' => 'Руководитель',
-                'email' => 'leader@chat.ap.kz',
+                'email' => 'leader@erp.ap.kz',
                 'password' => Hash::make('password'),
                 'role' => 'leader',
             ]

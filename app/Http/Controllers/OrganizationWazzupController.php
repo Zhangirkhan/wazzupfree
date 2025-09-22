@@ -24,7 +24,7 @@ class OrganizationWazzupController extends Controller
         return response()->json([
             'organization' => $organization->name,
             'wazzup24_enabled' => $organization->wazzup24_enabled,
-            'wazzup24_api_key' => $organization->wazzup24_api_key ? '***' . substr($organization->wazzup24_api_key, -4) : null,
+            'wazzup24_api_key' => $organization->wazzup24_api_key,
             'wazzup24_channel_id' => $organization->wazzup24_channel_id,
             'wazzup24_webhook_url' => $organization->wazzup24_webhook_url,
             'wazzup24_settings' => $organization->wazzup24_settings,
@@ -127,10 +127,17 @@ class OrganizationWazzupController extends Controller
             return response()->json(['error' => 'Wazzup24 не настроен для организации'], 400);
         }
 
-        $webhookUrl = $organization->getWebhookUrl();
+        // Позволяем переопределять URL и подписки из запроса
+        $webhookUrl = $request->input('webhook_url') ?: $organization->getWebhookUrl();
+        $subscriptions = (array) $request->input('subscriptions', []);
+
+        // Если пришёл новый URL — сохраняем его в организации
+        if ($request->filled('webhook_url')) {
+            $organization->update(['wazzup24_webhook_url' => $webhookUrl]);
+        }
 
         $wazzupService = new OrganizationWazzupService($organization);
-        $result = $wazzupService->setupWebhooks($webhookUrl);
+        $result = $wazzupService->setupWebhooks($webhookUrl, $subscriptions);
 
         if ($result['success']) {
             Log::info('Webhooks configured for organization', [

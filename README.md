@@ -62,19 +62,19 @@ npm run dev
 После установки системы создаются следующие пользователи:
 
 #### 👑 Администратор
-**Логин**: `admin@chat.ap.kz`  
+**Логин**: `admin@erp.ap.kz`  
 **Пароль**: `password`  
 **Роль**: `admin`
 **Описание**: Полный доступ ко всем разделам системы
 
 #### 👨‍💼 Менеджер
-**Логин**: `manager@chat.ap.kz`  
+**Логин**: `manager@erp.ap.kz`  
 **Пароль**: `password`  
 **Роль**: `manager`  
 **Описание**: Доступ к мессенджеру и клиентам
 
 #### 👷 Руководитель
-**Логин**: `leader@chat.ap.kz`  
+**Логин**: `leader@erp.ap.kz`  
 **Пароль**: `password`  
 **Роль**: `leader`  
 **Описание**: Руководство отделом и принятие решений
@@ -100,7 +100,7 @@ php artisan user:assign-role user@example.com admin
 ### Быстрый доступ к админке
 ```bash
 # Показать информацию для входа
-php artisan admin:login admin@chat.ap.kz
+php artisan admin:login admin@erp.ap.kz
 
 # Показать всех пользователей
 php artisan profile:show --all
@@ -189,9 +189,9 @@ fetch(url, {
 8. **CSRF защита** - добавлен /api/csrf-token и middleware для SPA безопасности
 
 ### Рабочие пользователи:
-- **👑 Админ**: `admin@chat.ap.kz` / `password`
-- **👨‍💼 Менеджер**: `manager@chat.ap.kz` / `password`  
-- **👷 Руководитель**: `leader@chat.ap.kz` / `password`
+- **👑 Админ**: `admin@erp.ap.kz` / `password`
+- **👨‍💼 Менеджер**: `manager@erp.ap.kz` / `password`  
+- **👷 Руководитель**: `leader@erp.ap.kz` / `password`
 - **🧪 Тест**: `test@back-chat.ap.kz` / `password123`
 
 ### 🔧 Правильная последовательность для фронтенда (SPA + Bearer токены):
@@ -219,7 +219,7 @@ const response = await fetch('https://back-chat.ap.kz/api/auth/login', {
   },
   credentials: 'include', // Для cookies
   body: JSON.stringify({
-    email: 'admin@chat.ap.kz',
+    email: 'admin@erp.ap.kz',
     password: 'password'
   })
 });
@@ -364,7 +364,7 @@ class AuthService {
 const auth = new AuthService();
 
 // Войти
-await auth.login('admin@chat.ap.kz', 'password');
+await auth.login('admin@erp.ap.kz', 'password');
 
 // Получить пользователя
 const user = await auth.getUser();
@@ -509,7 +509,7 @@ php artisan make:controller Api/ControllerName --api
      },
      credentials: 'include',
      body: JSON.stringify({
-       email: 'admin@chat.ap.kz',
+       email: 'admin@erp.ap.kz',
        password: 'password'
      })
    });
@@ -524,7 +524,7 @@ php artisan make:controller Api/ControllerName --api
        'Accept': 'application/json'
      },
      body: JSON.stringify({
-       email: 'admin@chat.ap.kz',
+       email: 'admin@erp.ap.kz',
        password: 'password'
      })
    });

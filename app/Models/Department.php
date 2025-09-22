@@ -81,4 +81,22 @@ class Department extends Model
     {
         return $query->where('show_in_chatbot', true);
     }
+
+    /**
+     * Получить руководителей отдела
+     */
+    public function leaders()
+    {
+        return $this->users()->wherePivot('role_id', function($query) {
+            $query->select('id')->from('roles')->where('slug', 'leader');
+        });
+    }
+
+    /**
+     * Получить основного руководителя отдела
+     */
+    public function leader()
+    {
+        return $this->leaders()->first();
+    }
 }

@@ -15,9 +15,9 @@ class ChatSeeder extends Seeder
     public function run(): void
     {
         // Получаем пользователей
-        $admin = User::where('email', 'admin@chat.ap.kz')->first();
-        $manager = User::where('email', 'manager@chat.ap.kz')->first();
-        $leader = User::where('email', 'leader@chat.ap.kz')->first();
+        $admin = User::where('email', 'admin@erp.ap.kz')->first();
+        $manager = User::where('email', 'manager@erp.ap.kz')->first();
+        $leader = User::where('email', 'leader@erp.ap.kz')->first();
 
         if (!$admin || !$manager || !$leader) {
             $this->command->warn('Не найдены пользователи для создания тестовых чатов');

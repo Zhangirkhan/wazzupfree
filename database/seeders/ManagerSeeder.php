@@ -26,10 +26,10 @@ class ManagerSeeder extends Seeder
         }
 
         User::updateOrCreate(
-            ['email' => 'manager@chat.ap.kz'],
+            ['email' => 'manager@erp.ap.kz'],
             [
                 'name' => 'Менеджер',
-                'email' => 'manager@chat.ap.kz',
+                'email' => 'manager@erp.ap.kz',
                 'password' => Hash::make('password'),
                 'role' => 'manager',
             ]

@@ -24,7 +24,7 @@ class OrganizationResource extends JsonResource
             'webhook_url' => $this->getWebhookUrl(),
             'webhook_token' => $this->generateWebhookToken(),
             'wazzup24_enabled' => $this->wazzup24_enabled,
-            'wazzup24_api_key' => $this->when($this->wazzup24_api_key, '***masked***'),
+            'wazzup24_api_key' => $this->wazzup24_api_key,
             'wazzup24_channel_id' => $this->wazzup24_channel_id,
             'wazzup24_webhook_url' => $this->wazzup24_webhook_url,
             'wazzup24_settings' => $this->wazzup24_settings,
