@@ -30,10 +30,10 @@ class ChatResource extends JsonResource
                 ->count();
         }
 
-        // Для мессенджер чатов используем title как имя клиента, для обычных - клиента из БД
-        $clientName = $this->is_messenger_chat
-            ? $this->title
-            : ($this->client ? $this->client->name : $this->title);
+        // Имя клиента: приоритет реальному имени из Client, затем title, затем телефон
+        $clientName = $this->client && $this->client->name
+            ? $this->client->name
+            : ($this->title ?: ($this->messenger_phone ?? $this->phone));
 
         return [
             'id' => $this->id,

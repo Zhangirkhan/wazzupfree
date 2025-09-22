@@ -264,11 +264,16 @@ class MessengerService
             $department = Department::find($departmentId);
 
             if ($department) {
+                // Переводим чат сразу в активный и уведомляем отдел, используя последнее клиентское сообщение
+                $alreadyNotified = $chat->messenger_data['department_notified'] ?? false;
+
                 $chat->update([
                     'department_id' => $department->id,
-                    'messenger_status' => 'department_selected',
+                    'messenger_status' => 'active',
+                    'last_activity_at' => now(),
                     'messenger_data' => array_merge($chat->messenger_data ?? [], [
-                        'wrong_answers' => 0 // Сбрасываем счетчик при правильном выборе
+                        'wrong_answers' => 0,
+                        'department_notified' => true
                     ])
                 ]);
 
@@ -276,7 +281,14 @@ class MessengerService
                 $historyService = app(ChatHistoryService::class);
                 $historyService->logDepartmentSelection($chat, $department);
 
-                $this->sendMessage($chat, "Вы выбрали отдел: {$department->name}\n\nТеперь напишите ваш вопрос:");
+                // Отправляем уведомление отделу с последним текстом клиента
+                $lastClientText = $this->getLastClientTextMessage($chat);
+                $this->notifyDepartment($chat, $lastClientText ?: '');
+
+                // Отправляем клиенту системное сообщение только один раз
+                if (!$alreadyNotified) {
+                    $this->sendMessage($chat, "Ваш вопрос отправлен в отдел {$department->name}. Ожидайте ответа.");
+                }
                 return;
             }
         }
@@ -373,9 +385,10 @@ class MessengerService
         $hasBeenNotified = $chat->messenger_data['department_notified'] ?? false;
 
         // Создаем активный чат
+        $resolvedClientName = $client->name ?: null;
         $chat->update([
             'messenger_status' => 'active',
-            'title' => $chat->client_name ?: $chat->messenger_phone ?: 'Неизвестный клиент',
+            'title' => $resolvedClientName ?: ($chat->title ?: ($chat->messenger_phone ?: 'Неизвестный клиент')),
             'last_activity_at' => now(),
             'messenger_data' => array_merge($chat->messenger_data ?? [], [
                 'department_notified' => true
@@ -1028,8 +1041,9 @@ class MessengerService
     protected function saveClientAudio($chat, $audioUrl, $caption, $client)
     {
         try {
-            // Аудио файлы больше не поддерживаются
-            $audioData = null;
+            // Сохраняем аудио через сервис
+            $audioService = app(\App\Services\AudioService::class);
+            $audioData = $audioService->saveAudioFromUrl($audioUrl, $chat->id);
 
             if (!$audioData) {
                 Log::error('Failed to save audio', [
@@ -1042,12 +1056,15 @@ class MessengerService
             // Создаем сообщение с аудио
             $messageContent = !empty($caption) ? $caption : 'Аудио сообщение';
 
-            Message::create([
+            $message = Message::create([
                 'chat_id' => $chat->id,
                 'user_id' => 1, // Используем системного пользователя
                 'content' => $messageContent,
                 'type' => 'audio',
                 'metadata' => [
+                    'file_path' => $audioData['url'],
+                    'file_name' => $audioData['filename'],
+                    'file_size' => $audioData['size'],
                     'audio_url' => $audioData['url'],
                     'audio_path' => $audioData['path'],
                     'audio_filename' => $audioData['filename'],
@@ -1060,6 +1077,9 @@ class MessengerService
                     'direction' => 'incoming'
                 ]
             ]);
+
+            // Публикуем событие для SSE
+            $this->publishMessageToRedis($chat->id, $message);
 
             Log::info('Client audio saved successfully', [
                 'chat_id' => $chat->id,
@@ -1360,6 +1380,23 @@ class MessengerService
     }
 
     /**
+     * Получить последний текстовый входящий месседж клиента
+     */
+    private function getLastClientTextMessage(Chat $chat): ?string
+    {
+        try {
+            $last = Message::where('chat_id', $chat->id)
+                ->where('is_from_client', true)
+                ->where('type', 'text')
+                ->orderBy('created_at', 'desc')
+                ->first();
+            return $last?->content;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
      * Уведомление назначенного пользователя
      */
     protected function notifyAssignedUser($chat, $message)
@@ -1410,6 +1447,26 @@ class MessengerService
                     'client_id' => $client->id,
                     'updates' => $updates
                 ]);
+
+                // Синхронизируем title чатов по этому номеру, если в title был телефон
+                try {
+                    $chatsToSync = Chat::where('messenger_phone', $client->phone)
+                        ->where('is_messenger_chat', true)
+                        ->where(function($q) use ($client) {
+                            $q->whereNull('title')
+                              ->orWhere('title', $client->phone)
+                              ->orWhere('title', 'Клиент ' . $client->phone);
+                        })
+                        ->get();
+                    foreach ($chatsToSync as $c) {
+                        $c->update(['title' => $client->name]);
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Не удалось синхронизировать title чатов с именем клиента', [
+                        'client_id' => $client->id,
+                        'error' => $e->getMessage()
+                    ]);
+                }
             }
         }
 

@@ -50,6 +50,16 @@ class ChatStreamController extends Controller
 
         return response()->stream(
             function () use ($chatId, $userId) {
+                @ini_set('zlib.output_compression', '0');
+                @ini_set('output_buffering', 'off');
+                @ini_set('implicit_flush', '1');
+                ignore_user_abort(true);
+                while (ob_get_level() > 0) { ob_end_flush(); }
+                ob_implicit_flush(true);
+                header('X-Accel-Buffering: no');
+                header('Cache-Control: no-cache');
+                header('Content-Type: text/event-stream');
+                header('Connection: keep-alive');
                 // Устанавливаем заголовки SSE
                 echo "retry: 3000\n";
                 echo "data: " . json_encode([
@@ -129,6 +139,16 @@ class ChatStreamController extends Controller
 
         return response()->stream(
             function () use ($userId) {
+                @ini_set('zlib.output_compression', '0');
+                @ini_set('output_buffering', 'off');
+                @ini_set('implicit_flush', '1');
+                ignore_user_abort(true);
+                while (ob_get_level() > 0) { ob_end_flush(); }
+                ob_implicit_flush(true);
+                header('X-Accel-Buffering: no');
+                header('Cache-Control: no-cache');
+                header('Content-Type: text/event-stream');
+                header('Connection: keep-alive');
                 // Устанавливаем заголовки SSE
                 echo "retry: 3000\n";
                 echo "data: " . json_encode([
@@ -211,6 +231,16 @@ class ChatStreamController extends Controller
 
         return response()->stream(
             function () use ($userId, $organizationId) {
+                @ini_set('zlib.output_compression', '0');
+                @ini_set('output_buffering', 'off');
+                @ini_set('implicit_flush', '1');
+                ignore_user_abort(true);
+                while (ob_get_level() > 0) { ob_end_flush(); }
+                ob_implicit_flush(true);
+                header('X-Accel-Buffering: no');
+                header('Cache-Control: no-cache');
+                header('Content-Type: text/event-stream');
+                header('Connection: keep-alive');
                 // Устанавливаем заголовки SSE
                 echo "retry: 3000\n";
                 echo "data: " . json_encode([

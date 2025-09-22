@@ -25,14 +25,37 @@ class MessageResource extends JsonResource
             $readAt = $this->getReadTimeBy($user->id);
         }
 
+        // Определяем путь к файлу в зависимости от типа сообщения
+        $filePath = null;
+        $fileName = null;
+        $fileSize = null;
+
+        if ($this->type === 'image') {
+            $filePath = $this->metadata['image_url'] ?? $this->metadata['file_path'] ?? null;
+            $fileName = $this->metadata['image_filename'] ?? $this->metadata['file_name'] ?? null;
+            $fileSize = $this->metadata['image_size'] ?? $this->metadata['file_size'] ?? null;
+        } elseif ($this->type === 'video') {
+            $filePath = $this->metadata['video_url'] ?? $this->metadata['file_path'] ?? null;
+            $fileName = $this->metadata['video_filename'] ?? $this->metadata['file_name'] ?? null;
+            $fileSize = $this->metadata['video_size'] ?? $this->metadata['file_size'] ?? null;
+        } elseif ($this->type === 'document') {
+            $filePath = $this->metadata['document_url'] ?? $this->metadata['file_path'] ?? null;
+            $fileName = $this->metadata['document_filename'] ?? $this->metadata['file_name'] ?? null;
+            $fileSize = $this->metadata['document_size'] ?? $this->metadata['file_size'] ?? null;
+        } else {
+            $filePath = $this->metadata['file_path'] ?? null;
+            $fileName = $this->metadata['file_name'] ?? null;
+            $fileSize = $this->metadata['file_size'] ?? null;
+        }
+
         return [
             'id' => $this->id,
             'message' => $this->content,
             'type' => $this->type,
             'is_from_client' => $this->is_from_client ?? ($this->direction === 'in'),
-            'file_path' => $this->metadata['file_path'] ?? null,
-            'file_name' => $this->metadata['file_name'] ?? null,
-            'file_size' => $this->metadata['file_size'] ?? null,
+            'file_path' => $filePath,
+            'file_name' => $fileName,
+            'file_size' => $fileSize,
             'created_at' => $this->created_at->toISOString(),
             'is_read' => $isRead,
             'read_at' => $readAt,
