@@ -5,9 +5,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Chat extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'organization_id',
         'title',
@@ -34,6 +36,7 @@ class Chat extends Model
         'last_activity_at' => 'datetime',
         'messenger_data' => 'array',
         'is_messenger_chat' => 'boolean',
+        'deleted_at' => 'datetime',
     ];
 
     public function organization(): BelongsTo
@@ -126,6 +129,16 @@ class Chat extends Model
     {
         // Администратор видит все чаты
         if ($user->role === 'admin') {
+            return true;
+        }
+
+        // Если пользователь создал чат
+        if ($this->created_by == $user->id) {
+            return true;
+        }
+
+        // Если чат назначен пользователю
+        if ($this->assigned_to == $user->id) {
             return true;
         }
 

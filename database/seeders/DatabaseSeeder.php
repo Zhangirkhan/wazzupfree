@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             AdminSeeder::class,
             ManagerSeeder::class,
             LeaderSeeder::class,
+            ChatSeeder::class,
         ]);
     }
 }

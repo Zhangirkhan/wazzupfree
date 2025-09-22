@@ -8,11 +8,33 @@ use Illuminate\Support\Facades\Log;
 class Wazzup24Service
 {
     private $apiKey;
+    private $channelId;
     private $baseUrl = 'https://api.wazzup24.com';
 
-    public function __construct()
+    public function __construct($apiKey = null, $channelId = null)
     {
-        $this->apiKey = config('services.wazzup24.api_key');
+        $this->apiKey = $apiKey ?: config('services.wazzup24.api_key');
+        $this->channelId = $channelId ?: config('services.wazzup24.channel_id');
+    }
+
+    /**
+     * Создание сервиса для организации
+     */
+    public static function forOrganization($organization)
+    {
+        if (!$organization->isWazzup24Configured()) {
+            throw new \Exception("Wazzup24 не настроен для организации {$organization->name}");
+        }
+
+        return new self($organization->wazzup24_api_key, $organization->wazzup24_channel_id);
+    }
+
+    /**
+     * Получить Channel ID
+     */
+    public function getChannelId()
+    {
+        return $this->channelId;
     }
 
     /**
@@ -23,14 +45,14 @@ class Wazzup24Service
         try {
             // Согласно документации, используем /v3/channels для проверки подключения
             $response = $this->makeRequest('GET', '/v3/channels');
-            
+
             return [
                 'success' => true,
                 'data' => $response
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API connection test failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -45,14 +67,14 @@ class Wazzup24Service
     {
         try {
             $response = $this->makeRequest('GET', '/v3/channels');
-            
+
             return [
                 'success' => true,
                 'channels' => $response
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API get channels failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -70,7 +92,7 @@ class Wazzup24Service
         try {
             // Очищаем текст от некорректных UTF-8 символов
             $cleanText = $this->cleanText($text);
-            
+
             $data = [
                 'channelId' => $channelId,
                 'chatType' => $chatType,
@@ -82,13 +104,13 @@ class Wazzup24Service
             // if ($crmUserId) {
             //     $data['crmUserId'] = $crmUserId;
             // }
-            // 
+            //
             // if ($crmMessageId) {
             //     $data['crmMessageId'] = $crmMessageId;
             // }
 
             $response = $this->makeRequest('POST', '/v3/message', $data);
-            
+
             return [
                 'success' => true,
                 'data' => $response,
@@ -96,7 +118,7 @@ class Wazzup24Service
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API send message failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -120,14 +142,14 @@ class Wazzup24Service
             }
 
             $response = $this->makeRequest('GET', '/v3/messages', null, $params);
-            
+
             return [
                 'success' => true,
                 'messages' => $response['messages'] ?? []
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API get messages failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -145,7 +167,7 @@ class Wazzup24Service
         }
 
         $url = $this->baseUrl . $endpoint;
-        
+
         if (!empty($params)) {
             $url .= '?' . http_build_query($params);
         }
@@ -155,19 +177,19 @@ class Wazzup24Service
             'Content-Type' => 'application/json',
             'Accept' => 'application/json'
         ];
-        
+
         // Добавляем авторизацию
         if (strpos($this->apiKey, 'Bearer ') === 0) {
             $headers['Authorization'] = $this->apiKey;
         } else {
             $headers['Authorization'] = 'Bearer ' . $this->apiKey;
         }
-        
+
         Log::info('Wazzup24 API request', [
             'method' => $method,
             'endpoint' => $endpoint
         ]);
-        
+
         $request = Http::withHeaders($headers);
 
         switch ($method) {
@@ -214,19 +236,19 @@ class Wazzup24Service
     {
         // Удаляем управляющие символы, но сохраняем переносы строк (\n, \r)
         $text = preg_replace('/[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/', '', $text);
-        
+
         // Удаляем символы замены UTF-8
         $text = str_replace("\u{FFFD}", '', $text);
-        
+
         // Конвертируем в UTF-8
         $text = mb_convert_encoding($text, 'UTF-8', 'UTF-8');
-        
+
         // Проверяем корректность
         if (!mb_check_encoding($text, 'UTF-8')) {
             // Если все еще некорректно, используем fallback
             $text = iconv('UTF-8', 'UTF-8//IGNORE', $text);
         }
-        
+
         return $text;
     }
 
@@ -255,14 +277,14 @@ class Wazzup24Service
             ];
 
             $response = $this->makeRequest('PATCH', '/v3/webhooks', $data);
-            
+
             return [
                 'success' => true,
                 'data' => $response
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API setup webhooks failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -277,14 +299,14 @@ class Wazzup24Service
     {
         try {
             $response = $this->makeRequest('GET', '/v3/webhooks');
-            
+
             return [
                 'success' => true,
                 'data' => $response
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API get webhooks failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -299,14 +321,14 @@ class Wazzup24Service
     {
         try {
             $response = $this->makeRequest('GET', '/users');
-            
+
             return [
                 'success' => true,
                 'users' => $response
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API get users failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -326,7 +348,7 @@ class Wazzup24Service
             ];
 
             $response = $this->makeRequest('GET', '/messages', null, $params);
-            
+
             // Извлекаем уникальных клиентов из сообщений
             $clients = [];
             $seenPhones = [];
@@ -334,10 +356,10 @@ class Wazzup24Service
             if (isset($response['messages']) && is_array($response['messages'])) {
                 foreach ($response['messages'] as $message) {
                     $phone = $message['senderData']['chatId'] ?? null;
-                    
+
                     if ($phone && !in_array($phone, $seenPhones)) {
                         $seenPhones[] = $phone;
-                        
+
                         $clients[] = [
                             'phone' => $phone,
                             'name' => $message['senderData']['name'] ?? 'Клиент ' . $phone,
@@ -348,7 +370,7 @@ class Wazzup24Service
                     }
                 }
             }
-            
+
             return [
                 'success' => true,
                 'clients' => $clients,
@@ -356,7 +378,7 @@ class Wazzup24Service
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API get clients failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -371,14 +393,14 @@ class Wazzup24Service
     {
         try {
             $response = $this->makeRequest('GET', '/contacts');
-            
+
             return [
                 'success' => true,
                 'contacts' => $response
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API get contacts failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -393,14 +415,14 @@ class Wazzup24Service
     {
         try {
             $response = $this->makeRequest('POST', '/users', $users);
-            
+
             return [
                 'success' => true,
                 'data' => $response
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API update users failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()
@@ -442,14 +464,14 @@ class Wazzup24Service
                     }
                 }
             }
-            
+
             return [
                 'success' => false,
                 'error' => 'Канал не найден'
             ];
         } catch (\Exception $e) {
             Log::error('Wazzup24 API get channel status failed: ' . $e->getMessage());
-            
+
             return [
                 'success' => false,
                 'error' => $e->getMessage()

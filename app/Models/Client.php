@@ -4,16 +4,20 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Client extends Model
 {
     protected $fillable = [
         'name',
         'phone',
+        'email',
         'uuid_wazzup',
         'comment',
         'is_active',
-        'avatar'
+        'avatar',
+        'contractor_id',
+        'company_id'
     ];
 
     protected $casts = [
@@ -49,10 +53,42 @@ class Client extends Model
     }
 
     /**
+     * Контрагент клиента
+     */
+    public function contractor(): BelongsTo
+    {
+        return $this->belongsTo(Contractor::class);
+    }
+
+    /**
+     * Компания клиента
+     */
+    public function company(): BelongsTo
+    {
+        return $this->belongsTo(Company::class);
+    }
+
+    /**
      * Чаты клиента
      */
     public function chats(): HasMany
     {
         return $this->hasMany(Chat::class, 'messenger_phone', 'phone');
+    }
+
+    /**
+     * Клиенты без контрагента (физ.лица)
+     */
+    public function scopeWithoutContractor($query)
+    {
+        return $query->whereNull('contractor_id');
+    }
+
+    /**
+     * Клиенты с контрагентом (юр.лица)
+     */
+    public function scopeWithContractor($query)
+    {
+        return $query->whereNotNull('contractor_id');
     }
 }
