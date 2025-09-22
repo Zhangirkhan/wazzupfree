@@ -16,10 +16,14 @@ class Department extends Model
         'parent_id',
         'level',
         'is_active',
+        'show_in_chatbot',
+        'chatbot_order',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'show_in_chatbot' => 'boolean',
+        'chatbot_order' => 'integer',
     ];
 
     public function organization(): BelongsTo
@@ -58,5 +62,23 @@ class Department extends Model
     public function scopeInactive($query)
     {
         return $query->where('is_active', false);
+    }
+
+    /**
+     * Отделы для чат-бота (активные и разрешенные для показа)
+     */
+    public function scopeForChatbot($query)
+    {
+        return $query->where('is_active', true)
+            ->where('show_in_chatbot', true)
+            ->orderBy('chatbot_order');
+    }
+
+    /**
+     * Отделы разрешенные для показа в чат-боте
+     */
+    public function scopeShowInChatbot($query)
+    {
+        return $query->where('show_in_chatbot', true);
     }
 }

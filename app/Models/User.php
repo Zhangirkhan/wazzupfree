@@ -27,6 +27,7 @@ class User extends Authenticatable
         'avatar',
         'role',
         'department_id',
+        'is_active',
     ];
 
     /**
@@ -49,6 +50,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -145,20 +147,54 @@ class User extends Authenticatable
      */
     public function hasPermission($permission): bool
     {
-        $permissions = [
-            'admin' => [
-                'dashboard', 'users', 'departments', 'chats', 'organizations', 
-                'positions', 'clients', 'settings'
-            ],
-            'manager' => [
-                'dashboard', 'clients', 'messenger'
-            ],
-            'employee' => [
-                'dashboard', 'clients', 'messenger'
-            ]
-        ];
+        // Админы видят всё
+        if ($this->role === 'admin') {
+            $adminPermissions = [
+                'dashboard', 'users', 'departments', 'chats', 'organizations',
+                'positions', 'clients', 'settings', 'messenger'
+            ];
+            return in_array($permission, $adminPermissions);
+        }
 
-        return in_array($permission, $permissions[$this->role] ?? []);
+        // Если пользователь имеет должность и отдел - показываем только общение
+        if ($this->hasPositionAndDepartment()) {
+            return in_array($permission, ['messenger', 'chats']);
+        }
+
+        // Пользователи без организационной структуры - стандартные права
+        $standardPermissions = ['dashboard', 'clients', 'messenger', 'chats'];
+        return in_array($permission, $standardPermissions);
+    }
+
+    /**
+     * Check if user has position and department (организационная структура)
+     */
+    public function hasPositionAndDepartment(): bool
+    {
+        return $this->department_id &&
+               $this->positions()->wherePivot('is_primary', true)->exists();
+    }
+
+    /**
+     * Get user's available permissions based on their role and position
+     */
+    public function getAvailablePermissions(): array
+    {
+        // Админы видят всё
+        if ($this->role === 'admin') {
+            return [
+                'dashboard', 'users', 'departments', 'organizations',
+                'positions', 'clients', 'settings', 'messenger'
+            ];
+        }
+
+        // Если пользователь имеет должность и отдел - только общение
+        if ($this->hasPositionAndDepartment()) {
+            return ['messenger'];
+        }
+
+        // Пользователи без организационной структуры - стандартные права
+        return ['dashboard', 'clients', 'messenger'];
     }
 
     /**
@@ -179,11 +215,11 @@ class User extends Authenticatable
     public function hasPosition($positionSlug, $organizationId = null)
     {
         $query = $this->positions()->where('slug', $positionSlug);
-        
+
         if ($organizationId) {
             $query->wherePivot('organization_id', $organizationId);
         }
-        
+
         return $query->exists();
     }
 
@@ -193,11 +229,11 @@ class User extends Authenticatable
     public function hasPositionPermission($permission, $organizationId = null)
     {
         $positions = $this->positions();
-        
+
         if ($organizationId) {
             $positions->wherePivot('organization_id', $organizationId);
         }
-        
+
         return $positions->get()->some(function ($position) use ($permission) {
             return $position->hasPermission($permission);
         });

@@ -5,11 +5,15 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Str;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\User;
+use App\Models\Organization;
 use App\Models\ChatParticipant;
 use App\Services\Wazzup24Service;
+use App\Services\OrganizationWazzupService;
 use App\Services\MessengerService;
 
 class WebhookController extends Controller
@@ -57,12 +61,12 @@ class WebhookController extends Controller
                 'timestamp' => now()->toDateTimeString(),
                 'method' => 'GET'
             ], 200);
-            
+
             Log::info('=== GET RESPONSE ===', [
                 'status' => $response->getStatusCode(),
                 'response' => $response->getContent()
             ]);
-            
+
             return $response;
         }
 
@@ -77,22 +81,22 @@ class WebhookController extends Controller
             $this->validateWebhook($request);
 
             $data = $request->all();
-            
+
             Log::info('Webhook data parsed:', ['data' => $data]);
-            
+
             // Проверяем тестовый запрос от Wazzup24
             if (isset($data['test']) && $data['test'] === true) {
                 Log::info('=== WAZZUP24 TEST WEBHOOK RECEIVED ===');
                 $response = response()->json(['status' => 'success'], 200);
-                
+
                 Log::info('=== TEST WEBHOOK RESPONSE ===', [
                     'status' => $response->getStatusCode(),
                     'response' => $response->getContent()
                 ]);
-                
+
                 return $response;
             }
-            
+
             // Логируем входящий webhook
             if (config('wazzup24.logging.enabled')) {
                 Log::channel(config('wazzup24.logging.channel'))->info('Wazzup24: Incoming webhook', $data);
@@ -100,29 +104,29 @@ class WebhookController extends Controller
 
             // Обрабатываем новый формат webhook'а Wazzup24
             Log::info('Processing webhook data structure:', array_keys($data));
-            
+
             // Проверяем наличие сообщений
             if (isset($data['messages']) && is_array($data['messages'])) {
                 Log::info('Found messages array with ' . count($data['messages']) . ' messages');
                 return $this->handleMessages($data['messages']);
             }
-            
+
             // Проверяем наличие статусов
             if (isset($data['statuses']) && is_array($data['statuses'])) {
                 Log::info('Found statuses array with ' . count($data['statuses']) . ' statuses');
                 return $this->handleStatuses($data['statuses']);
             }
-            
+
             // Проверяем наличие контактов
             if (isset($data['contacts']) && is_array($data['contacts'])) {
                 Log::info('Found contacts array with ' . count($data['contacts']) . ' contacts');
                 return $this->handleContacts($data['contacts']);
             }
-            
+
             // Проверяем старый формат для совместимости
             if (isset($data['type'])) {
                 Log::info('Processing legacy webhook type: ' . $data['type']);
-                
+
                 switch ($data['type']) {
                     case 'incomingMessageReceived':
                         return $this->handleIncomingMessage($data);
@@ -138,15 +142,15 @@ class WebhookController extends Controller
                         return response()->json(['error' => 'Unknown event type'], 400);
                 }
             }
-            
+
             Log::warning('Unknown webhook structure', ['data' => $data]);
             $response = response()->json(['error' => 'Unknown webhook structure'], 400);
-            
+
             Log::info('=== WEBHOOK RESPONSE ===', [
                 'status' => $response->getStatusCode(),
                 'response' => $response->getContent()
             ]);
-            
+
             return $response;
 
         } catch (\Exception $e) {
@@ -166,12 +170,12 @@ class WebhookController extends Controller
             }
 
             $response = response()->json(['error' => 'Internal server error'], 500);
-            
+
             Log::info('=== WEBHOOK ERROR RESPONSE ===', [
                 'status' => $response->getStatusCode(),
                 'response' => $response->getContent()
             ]);
-            
+
             return $response;
         }
     }
@@ -182,10 +186,10 @@ class WebhookController extends Controller
     protected function handleMessages(array $messages): JsonResponse
     {
         Log::info('=== HANDLING MESSAGES ARRAY ===', ['count' => count($messages)]);
-        
+
         $processed = 0;
         $errors = 0;
-        
+
         foreach ($messages as $message) {
             try {
                 // Проверяем, что это входящее сообщение (не echo)
@@ -193,7 +197,7 @@ class WebhookController extends Controller
                     Log::info('Skipping echo message', ['messageId' => $message['messageId'] ?? 'unknown']);
                     continue;
                 }
-                
+
                 // Обрабатываем входящее сообщение
                 $result = $this->processMessage($message);
                 if ($result) {
@@ -201,7 +205,7 @@ class WebhookController extends Controller
                 } else {
                     $errors++;
                 }
-                
+
             } catch (\Exception $e) {
                 Log::error('Error processing message', [
                     'message' => $message,
@@ -210,35 +214,35 @@ class WebhookController extends Controller
                 $errors++;
             }
         }
-        
+
         Log::info('Messages processing completed', [
             'processed' => $processed,
             'errors' => $errors
         ]);
-        
+
         $response = response()->json([
             'success' => true,
             'processed' => $processed,
             'errors' => $errors
         ]);
-        
+
         Log::info('=== MESSAGES PROCESSING COMPLETED ===', [
             'processed' => $processed,
             'errors' => $errors,
             'response_status' => $response->getStatusCode(),
             'response_content' => $response->getContent()
         ]);
-        
+
         return $response;
     }
-    
+
     /**
      * Обработка статусов сообщений
      */
     protected function handleStatuses(array $statuses): JsonResponse
     {
         Log::info('=== HANDLING STATUSES ARRAY ===', ['count' => count($statuses)]);
-        
+
         // Пока просто логируем статусы
         foreach ($statuses as $status) {
             Log::info('Message status update', [
@@ -246,28 +250,28 @@ class WebhookController extends Controller
                 'status' => $status['status'] ?? 'unknown'
             ]);
         }
-        
+
         $response = response()->json(['success' => true]);
-        
+
         Log::info('=== STATUSES PROCESSING COMPLETED ===', [
             'statuses_count' => count($statuses),
             'response_status' => $response->getStatusCode(),
             'response_content' => $response->getContent()
         ]);
-        
+
         return $response;
     }
-    
+
     /**
      * Обработка контактов
      */
     protected function handleContacts(array $contacts): JsonResponse
     {
         Log::info('=== HANDLING CONTACTS ARRAY ===', ['count' => count($contacts)]);
-        
+
         $processed = 0;
         $errors = 0;
-        
+
         foreach ($contacts as $contact) {
             try {
                 Log::info('Processing contact', [
@@ -275,12 +279,12 @@ class WebhookController extends Controller
                     'name' => $contact['name'] ?? 'unknown',
                     'phone' => $contact['phone'] ?? 'unknown'
                 ]);
-                
+
                 // Здесь можно добавить логику обработки контактов
                 // Например, создание или обновление клиента в базе данных
-                
+
                 $processed++;
-                
+
             } catch (\Exception $e) {
                 Log::error('Error processing contact', [
                     'contact' => $contact,
@@ -289,18 +293,18 @@ class WebhookController extends Controller
                 $errors++;
             }
         }
-        
+
         Log::info('Contacts processing completed', [
             'processed' => $processed,
             'errors' => $errors
         ]);
-        
+
         $response = response()->json([
             'success' => true,
             'processed' => $processed,
             'errors' => $errors
         ]);
-        
+
         Log::info('=== CONTACTS PROCESSING COMPLETED ===', [
             'contacts_count' => count($contacts),
             'processed' => $processed,
@@ -308,10 +312,10 @@ class WebhookController extends Controller
             'response_status' => $response->getStatusCode(),
             'response_content' => $response->getContent()
         ]);
-        
+
         return $response;
     }
-    
+
     /**
      * Обработка отдельного сообщения
      */
@@ -322,13 +326,13 @@ class WebhookController extends Controller
             'chatId' => $message['chatId'] ?? 'unknown',
             'type' => $message['type'] ?? 'unknown'
         ]);
-        
+
         $phone = $message['chatId'] ?? null;
         $text = $message['text'] ?? '';
         $messageId = $message['messageId'] ?? null;
         $contactName = $message['contact']['name'] ?? null;
         $messageType = $message['type'] ?? 'text';
-        
+
         Log::info('Message details:', [
             'phone' => $phone,
             'text' => $text,
@@ -336,44 +340,45 @@ class WebhookController extends Controller
             'contact_name' => $contactName,
             'type' => $messageType
         ]);
-        
+
         if (!$phone) {
             Log::error('Invalid message data - missing phone', [
                 'phone' => $phone
             ]);
             return false;
         }
-        
+
         // Обрабатываем изображения
         if ($messageType === 'imageMessage' || $messageType === 'image') {
             return $this->processImageMessage($message);
         }
-        
+
         // Обрабатываем видео
         if ($messageType === 'videoMessage' || $messageType === 'video') {
             return $this->processVideoMessage($message);
         }
-        
+
         // Обрабатываем стикеры
         if ($messageType === 'stickerMessage' || $messageType === 'sticker') {
             return $this->processStickerMessage($message);
         }
-        
+
         // Обрабатываем документы
         if ($messageType === 'documentMessage' || $messageType === 'document') {
             return $this->processDocumentMessage($message);
         }
-        
-        // Обрабатываем аудио
+
+        // Аудио больше не поддерживается
         if ($messageType === 'audioMessage' || $messageType === 'audio') {
-            return $this->processAudioMessage($message);
+            Log::info('Audio message ignored - audio support removed');
+            return response()->json(['status' => 'ignored', 'reason' => 'audio_not_supported'], 200);
         }
-        
+
         // Обрабатываем локацию
         if ($messageType === 'locationMessage' || $messageType === 'location') {
             return $this->processLocationMessage($message);
         }
-        
+
         // Обрабатываем текстовые сообщения
         if ($text === null || $text === '') {
             Log::error('Invalid message data - missing text', [
@@ -382,17 +387,39 @@ class WebhookController extends Controller
             ]);
             return false;
         }
-        
+
         // Используем MessengerService для обработки
         try {
             $messengerService = app(\App\Services\MessengerService::class);
             $result = $messengerService->handleIncomingMessage($phone, $text, $messageId);
-            
+
             if ($result && isset($result['success']) && $result['success']) {
                 Log::info('Message processed successfully', [
                     'chat_id' => $result['chat_id'] ?? 'unknown',
                     'message_id' => $result['message_id'] ?? 'unknown'
                 ]);
+
+                // 🔔 Отправляем уведомление через Redis для real-time обновлений
+                try {
+                    if (isset($result['chat_id'])) {
+                        $chat = Chat::find($result['chat_id']);
+                        if ($chat) {
+                            // Уведомление об обновлении чата
+                            Redis::publish('chat-updates', json_encode([
+                                'type' => 'chat_updated',
+                                'chat_id' => $chat->id,
+                                'organization_id' => $chat->organization_id,
+                                'last_activity_at' => $chat->last_activity_at,
+                                'client_name' => $chat->title
+                            ]));
+
+                            Log::info('📡 Redis notification sent', ['chat_id' => $chat->id]);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error('Failed to send Redis notification', ['error' => $e->getMessage()]);
+                }
+
                 return true;
             } else {
                 Log::error('Failed to process message', [
@@ -401,7 +428,7 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
         } catch (\Exception $e) {
             Log::error('Exception processing message', [
                 'error' => $e->getMessage(),
@@ -410,7 +437,7 @@ class WebhookController extends Controller
             return false;
         }
     }
-    
+
     /**
      * Обработка изображения из Wazzup24
      */
@@ -420,11 +447,11 @@ class WebhookController extends Controller
             $phone = $message['chatId'] ?? null;
             $messageId = $message['messageId'] ?? null;
             $contactName = $message['contact']['name'] ?? null;
-            
+
             // Получаем данные изображения - проверяем разные форматы
             $imageUrl = null;
             $caption = '';
-            
+
             // Формат 1: contentUri (новый формат Wazzup24)
             if (isset($message['contentUri'])) {
                 $imageUrl = $message['contentUri'];
@@ -449,7 +476,7 @@ class WebhookController extends Controller
                 $caption = $imageData['caption'] ?? '';
                 Log::info('Found image in image format', ['imageData' => $imageData]);
             }
-            
+
             if (!$imageUrl) {
                 Log::error('No image URL found in message', [
                     'message' => $message,
@@ -457,18 +484,18 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
             Log::info('Processing image message', [
                 'phone' => $phone,
                 'image_url' => $imageUrl,
                 'caption' => $caption,
                 'message_id' => $messageId
             ]);
-            
+
             // Используем MessengerService для обработки изображения
             $messengerService = app(\App\Services\MessengerService::class);
             $result = $messengerService->handleIncomingImage($phone, $imageUrl, $caption, $messageId);
-            
+
             if ($result && isset($result['success']) && $result['success']) {
                 Log::info('Image message processed successfully', [
                     'chat_id' => $result['chat_id'] ?? 'unknown',
@@ -482,7 +509,7 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
         } catch (\Exception $e) {
             Log::error('Exception processing image message', [
                 'error' => $e->getMessage(),
@@ -491,7 +518,7 @@ class WebhookController extends Controller
             return false;
         }
     }
-    
+
     /**
      * Обработка видео из Wazzup24
      */
@@ -501,11 +528,11 @@ class WebhookController extends Controller
             $phone = $message['chatId'] ?? null;
             $messageId = $message['messageId'] ?? null;
             $contactName = $message['contact']['name'] ?? null;
-            
+
             // Получаем данные видео - проверяем разные форматы
             $videoUrl = null;
             $caption = '';
-            
+
             // Формат 1: contentUri (новый формат Wazzup24)
             if (isset($message['contentUri'])) {
                 $videoUrl = $message['contentUri'];
@@ -530,7 +557,7 @@ class WebhookController extends Controller
                 $caption = $videoData['caption'] ?? '';
                 Log::info('Found video in video format', ['videoData' => $videoData]);
             }
-            
+
             if (!$videoUrl) {
                 Log::error('No video URL found in message', [
                     'message' => $message,
@@ -538,18 +565,18 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
             Log::info('Processing video message', [
                 'phone' => $phone,
                 'video_url' => $videoUrl,
                 'caption' => $caption,
                 'message_id' => $messageId
             ]);
-            
+
             // Используем MessengerService для обработки видео
             $messengerService = app(\App\Services\MessengerService::class);
             $result = $messengerService->handleIncomingVideo($phone, $videoUrl, $caption, $messageId);
-            
+
             if ($result && isset($result['success']) && $result['success']) {
                 Log::info('Video message processed successfully', [
                     'chat_id' => $result['chat_id'] ?? 'unknown',
@@ -563,7 +590,7 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
         } catch (\Exception $e) {
             Log::error('Exception processing video message', [
                 'error' => $e->getMessage(),
@@ -572,7 +599,7 @@ class WebhookController extends Controller
             return false;
         }
     }
-    
+
     /**
      * Обработка стикера из Wazzup24
      */
@@ -582,11 +609,11 @@ class WebhookController extends Controller
             $phone = $message['chatId'] ?? null;
             $messageId = $message['messageId'] ?? null;
             $contactName = $message['contact']['name'] ?? null;
-            
+
             // Получаем данные стикера
             $stickerUrl = null;
             $caption = '';
-            
+
             // Формат 1: contentUri (новый формат Wazzup24)
             if (isset($message['contentUri'])) {
                 $stickerUrl = $message['contentUri'];
@@ -603,7 +630,7 @@ class WebhookController extends Controller
                 $caption = $stickerData['caption'] ?? '';
                 Log::info('Found sticker in stickerMessage format', ['stickerData' => $stickerData]);
             }
-            
+
             if (!$stickerUrl) {
                 Log::error('No sticker URL found in message', [
                     'message' => $message,
@@ -611,18 +638,18 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
             Log::info('Processing sticker message', [
                 'phone' => $phone,
                 'sticker_url' => $stickerUrl,
                 'caption' => $caption,
                 'message_id' => $messageId
             ]);
-            
+
             // Используем MessengerService для обработки стикера
             $messengerService = app(\App\Services\MessengerService::class);
             $result = $messengerService->handleIncomingSticker($phone, $stickerUrl, $caption, $messageId);
-            
+
             if ($result && isset($result['success']) && $result['success']) {
                 Log::info('Sticker message processed successfully', [
                     'chat_id' => $result['chat_id'] ?? 'unknown',
@@ -636,7 +663,7 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
         } catch (\Exception $e) {
             Log::error('Exception processing sticker message', [
                 'error' => $e->getMessage(),
@@ -645,7 +672,7 @@ class WebhookController extends Controller
             return false;
         }
     }
-    
+
     /**
      * Обработка документа из Wazzup24
      */
@@ -655,12 +682,12 @@ class WebhookController extends Controller
             $phone = $message['chatId'] ?? null;
             $messageId = $message['messageId'] ?? null;
             $contactName = $message['contact']['name'] ?? null;
-            
+
             // Получаем данные документа
             $documentUrl = null;
             $documentName = '';
             $caption = '';
-            
+
             // Формат 1: contentUri (новый формат Wazzup24)
             if (isset($message['contentUri'])) {
                 $documentUrl = $message['contentUri'];
@@ -680,7 +707,7 @@ class WebhookController extends Controller
                 $caption = $documentData['caption'] ?? '';
                 Log::info('Found document in documentMessage format', ['documentData' => $documentData]);
             }
-            
+
             if (!$documentUrl) {
                 Log::error('No document URL found in message', [
                     'message' => $message,
@@ -688,7 +715,7 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
             Log::info('Processing document message', [
                 'phone' => $phone,
                 'document_url' => $documentUrl,
@@ -696,11 +723,11 @@ class WebhookController extends Controller
                 'caption' => $caption,
                 'message_id' => $messageId
             ]);
-            
+
             // Используем MessengerService для обработки документа
             $messengerService = app(\App\Services\MessengerService::class);
             $result = $messengerService->handleIncomingDocument($phone, $documentUrl, $documentName, $caption, $messageId);
-            
+
             if ($result && isset($result['success']) && $result['success']) {
                 Log::info('Document message processed successfully', [
                     'chat_id' => $result['chat_id'] ?? 'unknown',
@@ -714,7 +741,7 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
         } catch (\Exception $e) {
             Log::error('Exception processing document message', [
                 'error' => $e->getMessage(),
@@ -723,80 +750,13 @@ class WebhookController extends Controller
             return false;
         }
     }
-    
+
     /**
-     * Обработка аудио из Wazzup24
+     * Обработка аудио из Wazzup24 - УДАЛЕНО
+     * Аудио больше не поддерживается
      */
-    protected function processAudioMessage(array $message): bool
-    {
-        try {
-            $phone = $message['chatId'] ?? null;
-            $messageId = $message['messageId'] ?? null;
-            $contactName = $message['contact']['name'] ?? null;
-            
-            // Получаем данные аудио
-            $audioUrl = null;
-            $caption = '';
-            
-            // Формат 1: contentUri (новый формат Wazzup24)
-            if (isset($message['contentUri'])) {
-                $audioUrl = $message['contentUri'];
-                $caption = $message['text'] ?? '';
-                Log::info('Found audio in contentUri format', [
-                    'contentUri' => $audioUrl,
-                    'caption' => $caption
-                ]);
-            }
-            // Формат 2: audioMessage (старый формат)
-            elseif (isset($message['audioMessage'])) {
-                $audioData = $message['audioMessage'];
-                $audioUrl = $audioData['link'] ?? $audioData['url'] ?? null;
-                $caption = $audioData['caption'] ?? '';
-                Log::info('Found audio in audioMessage format', ['audioData' => $audioData]);
-            }
-            
-            if (!$audioUrl) {
-                Log::error('No audio URL found in message', [
-                    'message' => $message,
-                    'available_keys' => array_keys($message)
-                ]);
-                return false;
-            }
-            
-            Log::info('Processing audio message', [
-                'phone' => $phone,
-                'audio_url' => $audioUrl,
-                'caption' => $caption,
-                'message_id' => $messageId
-            ]);
-            
-            // Используем MessengerService для обработки аудио
-            $messengerService = app(\App\Services\MessengerService::class);
-            $result = $messengerService->handleIncomingAudio($phone, $audioUrl, $caption, $messageId);
-            
-            if ($result && isset($result['success']) && $result['success']) {
-                Log::info('Audio message processed successfully', [
-                    'chat_id' => $result['chat_id'] ?? 'unknown',
-                    'message_id' => $result['message_id'] ?? 'unknown'
-                ]);
-                return true;
-            } else {
-                Log::error('Failed to process audio message', [
-                    'error' => $result['error'] ?? 'unknown error',
-                    'result' => $result
-                ]);
-                return false;
-            }
-            
-        } catch (\Exception $e) {
-            Log::error('Exception processing audio message', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-            return false;
-        }
-    }
-    
+    // protected function processAudioMessage(array $message): bool - УДАЛЕНО
+
     /**
      * Обработка локации из Wazzup24
      */
@@ -806,12 +766,12 @@ class WebhookController extends Controller
             $phone = $message['chatId'] ?? null;
             $messageId = $message['messageId'] ?? null;
             $contactName = $message['contact']['name'] ?? null;
-            
+
             // Получаем данные локации
             $latitude = null;
             $longitude = null;
             $address = '';
-            
+
             // Формат 1: locationMessage (новый формат Wazzup24)
             if (isset($message['locationMessage'])) {
                 $locationData = $message['locationMessage'];
@@ -828,7 +788,7 @@ class WebhookController extends Controller
                 $address = $locationData['address'] ?? $locationData['name'] ?? '';
                 Log::info('Found location in location format', ['locationData' => $locationData]);
             }
-            
+
             if (!$latitude || !$longitude) {
                 Log::error('No location coordinates found in message', [
                     'message' => $message,
@@ -836,7 +796,7 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
             Log::info('Processing location message', [
                 'phone' => $phone,
                 'latitude' => $latitude,
@@ -844,11 +804,11 @@ class WebhookController extends Controller
                 'address' => $address,
                 'message_id' => $messageId
             ]);
-            
+
             // Используем MessengerService для обработки локации
             $messengerService = app(\App\Services\MessengerService::class);
             $result = $messengerService->handleIncomingLocation($phone, $latitude, $longitude, $address, $messageId);
-            
+
             if ($result && isset($result['success']) && $result['success']) {
                 Log::info('Location message processed successfully', [
                     'chat_id' => $result['chat_id'] ?? 'unknown',
@@ -862,7 +822,7 @@ class WebhookController extends Controller
                 ]);
                 return false;
             }
-            
+
         } catch (\Exception $e) {
             Log::error('Exception processing location message', [
                 'error' => $e->getMessage(),
@@ -878,7 +838,7 @@ class WebhookController extends Controller
     protected function handleIncomingMessage(array $data): JsonResponse
     {
         Log::info('=== HANDLING INCOMING MESSAGE ===');
-        
+
         $messageData = $data['data'] ?? [];
         $phone = $messageData['senderData']['chatId'] ?? null;
         $text = $messageData['textMessageData']['textMessage'] ?? '';
@@ -918,7 +878,7 @@ class WebhookController extends Controller
             $this->messengerService->handleIncomingMessage($phone, $text, $wazzupChatId);
         } else {
             Log::info('Processing as REGULAR chat - will also trigger messenger system');
-            
+
             // ВАЖНО: Даже если это первое сообщение, обрабатываем его как мессенджер
             // Это создаст мессенджер чат и отправит меню
             $this->messengerService->handleIncomingMessage($phone, $text, $wazzupChatId);
@@ -964,12 +924,12 @@ class WebhookController extends Controller
         if ($messageId && $status) {
             // Находим сообщение по Wazzup ID и обновляем статус
             $message = Message::whereJsonContains('metadata->wazzup_message_id', $messageId)->first();
-            
+
             if ($message) {
                 $metadata = $message->metadata ?? [];
                 $metadata['wazzup_status'] = $status;
                 $metadata['status_updated_at'] = now()->toISOString();
-                
+
                 $message->update(['metadata' => $metadata]);
 
                 if (config('wazzup24.logging.enabled')) {
@@ -1001,9 +961,9 @@ class WebhookController extends Controller
     {
         // Здесь можно добавить проверку подписи webhook'а
         // для дополнительной безопасности
-        
+
         $webhookSecret = config('wazzup24.api.webhook_secret');
-        
+
         if ($webhookSecret) {
             // Проверка подписи (если Wazzup24 поддерживает)
             // $signature = $request->header('X-Wazzup24-Signature');
@@ -1020,16 +980,16 @@ class WebhookController extends Controller
     {
         // Очищаем номер телефона от лишних символов
         $cleanPhone = $this->cleanPhoneNumber($phone);
-        
+
         $user = User::where('phone', $cleanPhone)->first();
-        
+
         if (!$user) {
             // Создаем нового пользователя
             $user = User::create([
                 'name' => 'WhatsApp User (' . $cleanPhone . ')',
                 'email' => 'whatsapp_' . $cleanPhone . '@example.com',
                 'phone' => $cleanPhone,
-                'password' => bcrypt(str_random(16)),
+                'password' => bcrypt(Str::random(16)),
             ]);
 
             // Привязываем к организации по умолчанию
@@ -1095,12 +1055,352 @@ class WebhookController extends Controller
     {
         // Убираем все кроме цифр
         $clean = preg_replace('/[^0-9]/', '', $phone);
-        
+
         // Убираем код страны если он есть (предполагаем, что это российский номер)
         if (strlen($clean) > 10 && substr($clean, 0, 1) === '7') {
             $clean = substr($clean, 1);
         }
-        
+
         return $clean;
+    }
+
+    /**
+     * Обработка webhook'ов для конкретной организации
+     */
+    public function organizationWebhook(Request $request, string $organization): JsonResponse
+    {
+        // Логируем входящий webhook для организации
+        Log::info('=== ORGANIZATION WEBHOOK RECEIVED ===', [
+            'organization' => $organization,
+            'timestamp' => now()->toDateTimeString(),
+            'method' => $request->method(),
+            'url' => $request->fullUrl(),
+            'ip' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'content_type' => $request->header('Content-Type'),
+            'content_length' => $request->header('Content-Length'),
+            'all_headers' => $request->headers->all(),
+            'query_params' => $request->query(),
+            'body_params' => $request->all(),
+            'raw_body' => $request->getContent(),
+        ]);
+
+        // Находим организацию по slug
+        $org = Organization::where('slug', $organization)->first();
+
+        if (!$org) {
+            Log::error('Organization not found', ['organization' => $organization]);
+            return response()->json(['error' => 'Organization not found'], 404);
+        }
+
+        // Проверяем, что Wazzup24 настроен для организации
+        if (!$org->isWazzup24Configured()) {
+            Log::error('Wazzup24 not configured for organization', ['organization' => $organization]);
+            return response()->json(['error' => 'Wazzup24 not configured'], 400);
+        }
+
+        // Обрабатываем GET запросы (для тестирования)
+        if ($request->method() === 'GET') {
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Organization webhook endpoint is accessible',
+                'organization' => $org->name,
+                'timestamp' => now()->toDateTimeString(),
+                'method' => 'GET'
+            ], 200);
+        }
+
+        try {
+            $data = $request->all();
+
+            // Проверяем тестовый запрос
+            if (isset($data['test']) && $data['test'] === true) {
+                Log::info('Organization test webhook received', ['organization' => $organization]);
+                return response()->json(['status' => 'success'], 200);
+            }
+
+            // Обрабатываем сообщения для организации
+            if (isset($data['messages']) && is_array($data['messages'])) {
+                Log::info('Processing messages for organization', [
+                    'organization' => $organization,
+                    'count' => count($data['messages'])
+                ]);
+                return $this->handleMessagesForOrganization($data['messages'], $org);
+            }
+
+            // Обрабатываем статусы для организации
+            if (isset($data['statuses']) && is_array($data['statuses'])) {
+                Log::info('Processing statuses for organization', [
+                    'organization' => $organization,
+                    'count' => count($data['statuses'])
+                ]);
+                return $this->handleStatusesForOrganization($data['statuses'], $org);
+            }
+
+            // Обрабатываем контакты для организации
+            if (isset($data['contacts']) && is_array($data['contacts'])) {
+                Log::info('Processing contacts for organization', [
+                    'organization' => $organization,
+                    'count' => count($data['contacts'])
+                ]);
+                return $this->handleContactsForOrganization($data['contacts'], $org);
+            }
+
+            return response()->json(['status' => 'success'], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Organization webhook error', [
+                'organization' => $organization,
+                'error' => $e->getMessage(),
+                'data' => $request->all()
+            ]);
+
+            return response()->json(['status' => 'error', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Обработка сообщений для организации
+     */
+    protected function handleMessagesForOrganization(array $messages, Organization $organization): JsonResponse
+    {
+        foreach ($messages as $messageData) {
+            try {
+                $this->processMessageForOrganization($messageData, $organization);
+            } catch (\Exception $e) {
+                Log::error('Error processing message for organization', [
+                    'organization' => $organization->id,
+                    'message' => $messageData,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        return response()->json(['status' => 'success']);
+    }
+
+    /**
+     * Обработка статусов для организации
+     */
+    protected function handleStatusesForOrganization(array $statuses, Organization $organization): JsonResponse
+    {
+        foreach ($statuses as $statusData) {
+            try {
+                $this->processMessageStatusForOrganization($statusData, $organization);
+            } catch (\Exception $e) {
+                Log::error('Error processing status for organization', [
+                    'organization' => $organization->id,
+                    'status' => $statusData,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        return response()->json(['status' => 'success']);
+    }
+
+    /**
+     * Обработка контактов для организации
+     */
+    protected function handleContactsForOrganization(array $contacts, Organization $organization): JsonResponse
+    {
+        foreach ($contacts as $contactData) {
+            try {
+                $this->processContactForOrganization($contactData, $organization);
+            } catch (\Exception $e) {
+                Log::error('Error processing contact for organization', [
+                    'organization' => $organization->id,
+                    'contact' => $contactData,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        return response()->json(['status' => 'success']);
+    }
+
+    /**
+     * Обработка сообщения для организации
+     */
+    protected function processMessageForOrganization(array $messageData, Organization $organization): void
+    {
+        // Поддержка НОВОГО формата API v3
+        $messageId = $messageData['messageId'] ?? null;
+        $channelId = $messageData['channelId'] ?? null;
+        $chatType = $messageData['chatType'] ?? null;
+        $chatId = $messageData['chatId'] ?? null;
+        $text = $messageData['text'] ?? '';
+        $status = $messageData['status'] ?? 'inbound';
+        $contact = $messageData['contact'] ?? [];
+        $dateTime = $messageData['dateTime'] ?? null;
+
+        // Извлекаем данные контакта
+        $phone = $contact['phone'] ?? $chatId ?? '';
+        $name = $contact['name'] ?? 'Клиент ' . $phone;
+        $avatar = $contact['avatarUri'] ?? null;
+
+        // Обрабатываем только входящие сообщения
+        if ($status !== 'inbound' || $text === '' || $text === null || empty($phone)) {
+            Log::warning('Invalid message data for organization', [
+                'organization' => $organization->id,
+                'message' => $messageData,
+                'status' => $status,
+                'text' => $text,
+                'phone' => $phone
+            ]);
+            return;
+        }
+
+        Log::info('🎯 Processing Wazzup24 message for organization', [
+            'organization' => $organization->name,
+            'phone' => $phone,
+            'text' => substr($text, 0, 50) . (strlen($text) > 50 ? '...' : ''),
+            'contact_name' => $name
+        ]);
+
+        // 🎯 ИСПОЛЬЗУЕМ MessengerService для полной обработки!
+        try {
+            $contactData = [
+                'name' => $name,
+                'avatarUri' => $avatar,
+                'avatar' => $avatar
+            ];
+
+            // Используем MessengerService для обработки входящего сообщения
+            $messengerService = app(\App\Services\MessengerService::class);
+            $result = $messengerService->handleIncomingMessage($phone, $text, $contactData, $organization);
+
+            if ($result['success']) {
+                Log::info('✅ Message processed successfully via MessengerService', [
+                    'organization' => $organization->name,
+                    'phone' => $phone,
+                    'chat_id' => $result['chat_id'] ?? null,
+                    'message_id' => $result['message_id'] ?? null
+                ]);
+            } else {
+                Log::error('❌ MessengerService failed to process message', [
+                    'organization' => $organization->name,
+                    'phone' => $phone,
+                    'error' => $result['error'] ?? 'Unknown error'
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('❌ Exception in MessengerService processing', [
+                'organization' => $organization->name,
+                'phone' => $phone,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+
+    /**
+     * Обработка статуса сообщения для организации
+     */
+    protected function processMessageStatusForOrganization(array $statusData, Organization $organization): void
+    {
+        $messageId = $statusData['idMessage'] ?? null;
+        $status = $statusData['status'] ?? null;
+
+        if ($messageId && $status) {
+            $message = Message::whereJsonContains('metadata->wazzup_message_id', $messageId)
+                            ->whereJsonContains('metadata->organization_id', $organization->id)
+                            ->first();
+
+            if ($message) {
+                $metadata = $message->metadata ?? [];
+                $metadata['wazzup_status'] = $status;
+                $metadata['status_updated_at'] = now()->toISOString();
+
+                $message->update(['metadata' => $metadata]);
+
+                Log::info('Message status updated for organization', [
+                    'organization' => $organization->id,
+                    'message_id' => $message->id,
+                    'wazzup_message_id' => $messageId,
+                    'status' => $status
+                ]);
+            }
+        }
+    }
+
+    /**
+     * Обработка контакта для организации
+     */
+    protected function processContactForOrganization(array $contactData, Organization $organization): void
+    {
+        // Здесь можно добавить логику обработки контактов
+        Log::info('Contact processed for organization', [
+            'organization' => $organization->id,
+            'contact' => $contactData
+        ]);
+    }
+
+    /**
+     * Поиск или создание пользователя для организации
+     */
+    protected function findOrCreateUserByPhoneForOrganization(string $phone, Organization $organization): User
+    {
+        $cleanPhone = $this->cleanPhoneNumber($phone);
+
+        $user = User::where('phone', $cleanPhone)->first();
+
+        if (!$user) {
+            $user = User::create([
+                'name' => 'WhatsApp User (' . $cleanPhone . ')',
+                'email' => 'whatsapp_' . $cleanPhone . '@example.com',
+                'phone' => $cleanPhone,
+                'password' => bcrypt(Str::random(16)),
+            ]);
+
+            // Привязываем к организации
+            $user->organizations()->attach($organization->id, [
+                'department_id' => null,
+                'role_id' => null,
+                'is_active' => true,
+            ]);
+        }
+
+        return $user;
+    }
+
+    /**
+     * Поиск или создание чата для организации
+     */
+    protected function findOrCreateChatForOrganization(string $phone, User $user, Organization $organization): Chat
+    {
+        // Ищем чат по номеру телефона в рамках организации
+        $chat = Chat::where('organization_id', $organization->id)
+                   ->whereJsonContains('metadata->phone', $phone)
+                   ->first();
+
+        if ($chat) {
+            return $chat;
+        }
+
+        // Создаем новый чат для организации
+        $chat = Chat::create([
+            'organization_id' => $organization->id,
+            'title' => 'WhatsApp: ' . $phone,
+            'description' => 'WhatsApp чат с ' . $phone,
+            'type' => 'private',
+            'created_by' => $user->id,
+            'status' => 'active',
+            'metadata' => [
+                'wazzup_chat_id' => $phone,
+                'phone' => $phone,
+                'source' => 'whatsapp'
+            ]
+        ]);
+
+        // Добавляем пользователя как участника
+        ChatParticipant::create([
+            'chat_id' => $chat->id,
+            'user_id' => $user->id,
+            'role' => 'participant',
+            'is_active' => true,
+        ]);
+
+        return $chat;
     }
 }

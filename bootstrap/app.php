@@ -16,6 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\ForceHttps::class,
         ]);
 
+        // Убираем EnsureFrontendRequestsAreStateful из глобальных API middleware
+        // Он будет применяться только к конкретным маршрутам
+
         // Регистрируем middleware для проверки разрешений
         $middleware->alias([
             'permission' => \App\Http\Middleware\CheckPermission::class,
