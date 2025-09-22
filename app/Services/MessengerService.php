@@ -220,14 +220,11 @@ class MessengerService
      */
     protected function sendInitialMenu($chat, $client)
     {
-        // Специальная обработка для тестовых номеров
-        if ($this->isTestNumber($chat->messenger_phone)) {
-            $menuText = $this->generateTestMenuText();
-        } else {
-            // Показываем только отделы с включенным показом в чат-боте
-            $departments = Department::forChatbot()->get();
-            $menuText = $this->generateMenuText($departments);
-        }
+        // Показываем только отделы текущей организации с включенным показом в чат-боте
+        $departments = Department::forChatbot()
+            ->where('organization_id', $chat->organization_id)
+            ->get();
+        $menuText = $this->generateMenuText($departments);
 
         // Отправляем меню
         $this->sendMessage($chat, $menuText);
@@ -247,8 +244,10 @@ class MessengerService
             return;
         }
 
-        // Получаем список отделов для чат-бота
-        $chatbotDepartments = Department::forChatbot()->get();
+        // Получаем список отделов для чат-бота ТЕКУЩЕЙ ОРГАНИЗАЦИИ
+        $chatbotDepartments = Department::forChatbot()
+            ->where('organization_id', $chat->organization_id)
+            ->get();
 
         // Создаем массив соответствия номера выбора к ID отдела
         $departmentMapping = [];
@@ -317,27 +316,31 @@ class MessengerService
      */
     protected function handleTestNumberSelection($chat, $message, $client)
     {
-        // Обрабатываем выбор отдела
-        if (in_array($message, ['1', '2'])) {
-            $departments = [
-                '1' => ['name' => 'Бухгалтерия', 'id' => 1],
-                '2' => ['name' => 'Хоз отдел', 'id' => 2]
-            ];
+        // Для тестовых номеров тоже используем реальные отделы организации
+        $chatbotDepartments = Department::forChatbot()
+            ->where('organization_id', $chat->organization_id)
+            ->get();
 
-            if (isset($departments[$message])) {
-                $department = $departments[$message];
-                $chat->update([
-                    'messenger_status' => 'department_selected',
-                    'department_id' => $department['id']
-                ]);
+        // Строим мэппинг по позициям (1..N)
+        $departmentMapping = [];
+        foreach ($chatbotDepartments as $index => $dept) {
+            $departmentMapping[(string)($index + 1)] = $dept;
+        }
 
-                // Логируем выбор отдела для тестовых номеров
-                $historyService = app(ChatHistoryService::class);
-                $historyService->logDepartmentSelection($chat, Department::find($department['id']));
+        if (isset($departmentMapping[$message])) {
+            /** @var \App\Models\Department $dept */
+            $dept = $departmentMapping[$message];
 
-                $this->sendMessage($chat, "Подключаем с {$department['name']}. Пожалуйста, можете задать вопрос.");
-                return;
-            }
+            $chat->update([
+                'messenger_status' => 'department_selected',
+                'department_id' => $dept->id
+            ]);
+
+            $historyService = app(ChatHistoryService::class);
+            $historyService->logDepartmentSelection($chat, $dept);
+
+            $this->sendMessage($chat, "Подключаем с {$dept->name}. Пожалуйста, можете задать вопрос.");
+            return;
         }
 
         // Обрабатываем "0" - сброс к меню
@@ -492,9 +495,15 @@ class MessengerService
     {
         $text = "Добро пожаловать! С кем хотите связаться?\n\n";
 
-        foreach ($departments as $department) {
-            $text .= "{$department->id}. {$department->name}\n";
+        // Нумерация в меню должна соответствовать позиции (1..N),
+        // так как обработчик выбора ожидает именно порядковые номера
+        foreach ($departments as $index => $department) {
+            $number = $index + 1;
+            $text .= "{$number}. {$department->name}\n";
         }
+
+        // Подсказка по возврату в меню из других состояний
+        $text .= "\n0. Вернуться в главное меню";
 
         return $text;
     }
@@ -519,7 +528,8 @@ class MessengerService
      */
     protected function generateTestMenuText()
     {
-        return "Добрый день. Это Акжол Фарм.\n\nЧто вас интересует (пришлите номер выбранного пункта):\n\n1. Бухгалтерия\n2. Хоз отдел";
+        // Больше не используем хардкод отделов; оставлено для совместимости
+        return "Добрый день! Выберите отдел, отправив его номер из списка.";
     }
 
     /**

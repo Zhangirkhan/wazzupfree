@@ -29,7 +29,7 @@ class DepartmentService
 
     public function getDepartment(int $id): ?Department
     {
-        return Department::with(['organization', 'leader'])->find($id);
+        return Department::with(['organization'])->find($id);
     }
 
     public function createDepartment(array $data): Department
@@ -54,7 +54,7 @@ class DepartmentService
                 'organization_id' => $department->organization_id
             ]);
 
-            return $department->load(['organization', 'leader']);
+            return $department->load(['organization']);
         });
     }
 
@@ -68,12 +68,20 @@ class DepartmentService
                 Organization::findOrFail($data['organization_id']);
             }
 
+            // Маппим status -> is_active, если приходит статус
+            if (isset($data['status'])) {
+                $normalized = strtolower((string)$data['status']);
+                if (in_array($normalized, ['active', 'inactive'], true)) {
+                    $data['is_active'] = $normalized === 'active';
+                }
+            }
+
             $department->update([
                 'name' => $data['name'] ?? $department->name,
                 'slug' => $data['slug'] ?? $department->slug,
                 'description' => $data['description'] ?? $department->description,
                 'organization_id' => $data['organization_id'] ?? $department->organization_id,
-                'is_active' => $data['is_active'] ?? $department->is_active,
+                'is_active' => array_key_exists('is_active', $data) ? (bool)$data['is_active'] : $department->is_active,
                 'show_in_chatbot' => $data['show_in_chatbot'] ?? $department->show_in_chatbot,
                 'chatbot_order' => $data['chatbot_order'] ?? $department->chatbot_order,
             ]);
@@ -83,7 +91,7 @@ class DepartmentService
                 'name' => $department->name
             ]);
 
-            return $department->load(['organization', 'leader']);
+            return $department->load(['organization']);
         });
     }
 

@@ -99,4 +99,12 @@ class Department extends Model
     {
         return $this->leaders()->first();
     }
+
+    /**
+     * Аксессор для получения основного руководителя как атрибута
+     */
+    public function getLeaderAttribute()
+    {
+        return $this->leaders()->first();
+    }
 }
