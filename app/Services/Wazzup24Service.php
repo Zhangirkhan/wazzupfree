@@ -127,6 +127,166 @@ class Wazzup24Service
     }
 
     /**
+     * Отправка изображения
+     */
+    public function sendImage($channelId, $chatType, $chatId, $imageUrl, $caption = null, $crmUserId = null, $crmMessageId = null)
+    {
+        try {
+            $data = [
+                'channelId' => $channelId,
+                'chatType' => $chatType,
+                'chatId' => $chatId,
+                'contentUri' => $imageUrl
+            ];
+
+            // Для изображений не отправляем text, так как это вызывает ошибку INVALID_MESSAGE_DATA
+            // Подпись будет отправлена отдельным текстовым сообщением
+
+            $response = $this->makeRequest('POST', '/v3/message', $data);
+
+            return [
+                'success' => true,
+                'data' => $response,
+                'message_id' => $response['messageId'] ?? null
+            ];
+        } catch (\Exception $e) {
+            Log::error('Wazzup24 API send image failed: ' . $e->getMessage());
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Отправка видео
+     */
+    public function sendVideo($channelId, $chatType, $chatId, $videoUrl, $caption = null, $crmUserId = null, $crmMessageId = null)
+    {
+        try {
+            $data = [
+                'channelId' => $channelId,
+                'chatType' => $chatType,
+                'chatId' => $chatId,
+                'contentUri' => $videoUrl
+            ];
+
+            // Для видео не отправляем text, так как это вызывает ошибку INVALID_MESSAGE_DATA
+            // Подпись будет отправлена отдельным текстовым сообщением
+
+            $response = $this->makeRequest('POST', '/v3/message', $data);
+
+            return [
+                'success' => true,
+                'data' => $response,
+                'message_id' => $response['messageId'] ?? null
+            ];
+        } catch (\Exception $e) {
+            Log::error('Wazzup24 API send video failed: ' . $e->getMessage());
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Отправка аудио
+     */
+    public function sendAudio($channelId, $chatType, $chatId, $audioUrl, $caption = null, $crmUserId = null, $crmMessageId = null)
+    {
+        try {
+            $data = [
+                'channelId' => $channelId,
+                'chatType' => $chatType,
+                'chatId' => $chatId,
+                'audioUrl' => $audioUrl
+            ];
+
+            if ($caption) {
+                $data['caption'] = $this->cleanText($caption);
+            }
+
+            $response = $this->makeRequest('POST', '/v3/message', $data);
+
+            return [
+                'success' => true,
+                'data' => $response,
+                'message_id' => $response['messageId'] ?? null
+            ];
+        } catch (\Exception $e) {
+            Log::error('Wazzup24 API send audio failed: ' . $e->getMessage());
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Отправка документа
+     */
+    public function sendDocument($channelId, $chatType, $chatId, $documentUrl, $fileName = null, $caption = null, $crmUserId = null, $crmMessageId = null)
+    {
+        try {
+            $data = [
+                'channelId' => $channelId,
+                'chatType' => $chatType,
+                'chatId' => $chatId,
+                'documentUrl' => $documentUrl
+            ];
+
+            if ($fileName) {
+                $data['fileName'] = $fileName;
+            }
+
+            if ($caption) {
+                $data['caption'] = $this->cleanText($caption);
+            }
+
+            $response = $this->makeRequest('POST', '/v3/message', $data);
+
+            return [
+                'success' => true,
+                'data' => $response,
+                'message_id' => $response['messageId'] ?? null
+            ];
+        } catch (\Exception $e) {
+            Log::error('Wazzup24 API send document failed: ' . $e->getMessage());
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Универсальный метод отправки медиа файла
+     */
+    public function sendMedia($channelId, $chatType, $chatId, $mediaUrl, $mediaType, $caption = null, $fileName = null, $crmUserId = null, $crmMessageId = null)
+    {
+        switch ($mediaType) {
+            case 'image':
+                return $this->sendImage($channelId, $chatType, $chatId, $mediaUrl, $caption, $crmUserId, $crmMessageId);
+            case 'video':
+                return $this->sendVideo($channelId, $chatType, $chatId, $mediaUrl, $caption, $crmUserId, $crmMessageId);
+            case 'audio':
+                return $this->sendAudio($channelId, $chatType, $chatId, $mediaUrl, $caption, $crmUserId, $crmMessageId);
+            case 'document':
+                return $this->sendDocument($channelId, $chatType, $chatId, $mediaUrl, $fileName, $caption, $crmUserId, $crmMessageId);
+            default:
+                return [
+                    'success' => false,
+                    'error' => 'Неподдерживаемый тип медиа: ' . $mediaType
+                ];
+        }
+    }
+
+    /**
      * Получение истории сообщений
      */
     public function getMessages($channelId, $chatId = null, $limit = 50)

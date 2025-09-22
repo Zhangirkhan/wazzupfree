@@ -50,16 +50,24 @@ class ChatStreamController extends Controller
 
         return response()->stream(
             function () use ($chatId, $userId) {
+                // Отключаем все виды буферизации
                 @ini_set('zlib.output_compression', '0');
                 @ini_set('output_buffering', 'off');
                 @ini_set('implicit_flush', '1');
                 ignore_user_abort(true);
-                while (ob_get_level() > 0) { ob_end_flush(); }
+                
+                // Очищаем все уровни буферизации
+                while (ob_get_level() > 0) { 
+                    ob_end_flush(); 
+                }
                 ob_implicit_flush(true);
+                
+                // Устанавливаем заголовки для отключения буферизации
                 header('X-Accel-Buffering: no');
                 header('Cache-Control: no-cache');
                 header('Content-Type: text/event-stream');
                 header('Connection: keep-alive');
+                header('Transfer-Encoding: chunked');
                 // Устанавливаем заголовки SSE
                 echo "retry: 3000\n";
                 echo "data: " . json_encode([
@@ -74,26 +82,61 @@ class ChatStreamController extends Controller
                 }
                 flush();
 
-                // Подписываемся на Redis канал чата
-                Redis::subscribe(['chat.' . $chatId], function ($message) {
-                    try {
-                        $data = json_decode($message, true);
-
-                        // Отправляем данные клиенту
-                        echo "data: " . json_encode($data) . "\n\n";
-
-                        if (ob_get_level()) {
-                            ob_end_flush();
-                        }
-                        flush();
-
-                    } catch (\Exception $e) {
-                        Log::error('SSE message processing error', [
-                            'error' => $e->getMessage(),
-                            'message' => $message
+                // Используем polling для получения сообщений чата
+                $iteration = 0;
+                while (true) {
+                    $iteration++;
+                    
+                    // Проверяем наличие сообщений в Redis списке чата
+                    $messages = Redis::lrange("sse_queue:chat.{$chatId}", 0, -1);
+                    if (!empty($messages)) {
+                        Log::info('SSE: Found messages in Redis queue', [
+                            'chat_id' => $chatId,
+                            'count' => count($messages),
+                            'iteration' => $iteration
                         ]);
+                        
+                        // Обрабатываем все сообщения
+                        foreach ($messages as $message) {
+                            try {
+                                $data = json_decode($message, true);
+                                if ($data) {
+                                    Log::info('SSE: Sending message to client', [
+                                        'chat_id' => $chatId,
+                                        'message_type' => $data['type'] ?? 'unknown',
+                                        'iteration' => $iteration
+                                    ]);
+                                    
+                                    // Отправляем данные клиенту
+                                    echo "data: " . json_encode($data) . "\n\n";
+                                    if (ob_get_level()) {
+                                        ob_end_flush();
+                                    }
+                                    flush();
+                                }
+                            } catch (\Exception $e) {
+                                Log::error('SSE message processing error', [
+                                    'error' => $e->getMessage(),
+                                    'message' => $message
+                                ]);
+                            }
+                        }
+                        // Очищаем обработанные сообщения
+                        Redis::del("sse_queue:chat.{$chatId}");
                     }
-                });
+                    
+                    // Небольшая пауза чтобы не перегружать CPU
+                    usleep(100000); // 0.1 секунды
+                    
+                    // Проверяем, не разорвалось ли соединение
+                    if (connection_aborted()) {
+                        Log::info('SSE: Connection aborted', [
+                            'chat_id' => $chatId,
+                            'iteration' => $iteration
+                        ]);
+                        break;
+                    }
+                }
             },
             200,
             [
@@ -139,16 +182,24 @@ class ChatStreamController extends Controller
 
         return response()->stream(
             function () use ($userId) {
+                // Отключаем все виды буферизации
                 @ini_set('zlib.output_compression', '0');
                 @ini_set('output_buffering', 'off');
                 @ini_set('implicit_flush', '1');
                 ignore_user_abort(true);
-                while (ob_get_level() > 0) { ob_end_flush(); }
+                
+                // Очищаем все уровни буферизации
+                while (ob_get_level() > 0) { 
+                    ob_end_flush(); 
+                }
                 ob_implicit_flush(true);
+                
+                // Устанавливаем заголовки для отключения буферизации
                 header('X-Accel-Buffering: no');
                 header('Cache-Control: no-cache');
                 header('Content-Type: text/event-stream');
                 header('Connection: keep-alive');
+                header('Transfer-Encoding: chunked');
                 // Устанавливаем заголовки SSE
                 echo "retry: 3000\n";
                 echo "data: " . json_encode([
@@ -231,16 +282,24 @@ class ChatStreamController extends Controller
 
         return response()->stream(
             function () use ($userId, $organizationId) {
+                // Отключаем все виды буферизации
                 @ini_set('zlib.output_compression', '0');
                 @ini_set('output_buffering', 'off');
                 @ini_set('implicit_flush', '1');
                 ignore_user_abort(true);
-                while (ob_get_level() > 0) { ob_end_flush(); }
+                
+                // Очищаем все уровни буферизации
+                while (ob_get_level() > 0) { 
+                    ob_end_flush(); 
+                }
                 ob_implicit_flush(true);
+                
+                // Устанавливаем заголовки для отключения буферизации
                 header('X-Accel-Buffering: no');
                 header('Cache-Control: no-cache');
                 header('Content-Type: text/event-stream');
                 header('Connection: keep-alive');
+                header('Transfer-Encoding: chunked');
                 // Устанавливаем заголовки SSE
                 echo "retry: 3000\n";
                 echo "data: " . json_encode([
@@ -262,27 +321,55 @@ class ChatStreamController extends Controller
 
                 if ($organizationId) {
                     $channels[] = 'organization.' . $organizationId . '.chats'; // Обновления чатов организации
+                } else {
+                    // Для пользователей без организации подписываемся на специальный канал
+                    $channels[] = 'chats.no_organization';
                 }
 
-                Redis::subscribe($channels, function ($message) {
-                    try {
-                        $data = json_decode($message, true);
-
-                        // Отправляем данные клиенту
-                        echo "data: " . json_encode($data) . "\n\n";
-
-                        if (ob_get_level()) {
-                            ob_end_flush();
+                // Используем polling вместо блокирующего subscribe
+                $lastCheck = time();
+                while (true) {
+                    // Проверяем каждую секунду
+                    if (time() - $lastCheck >= 1) {
+                        $lastCheck = time();
+                        
+                        // Проверяем наличие сообщений в Redis списках
+                        foreach ($channels as $channel) {
+                            $messages = Redis::lrange("sse_queue:{$channel}", 0, -1);
+                            if (!empty($messages)) {
+                                // Обрабатываем все сообщения
+                                foreach ($messages as $message) {
+                                    try {
+                                        $data = json_decode($message, true);
+                                        if ($data) {
+                                            // Отправляем данные клиенту
+                                            echo "data: " . json_encode($data) . "\n\n";
+                                            if (ob_get_level()) {
+                                                ob_end_flush();
+                                            }
+                                            flush();
+                                        }
+                                    } catch (\Exception $e) {
+                                        Log::error('Chat list SSE error', [
+                                            'error' => $e->getMessage(),
+                                            'message' => $message
+                                        ]);
+                                    }
+                                }
+                                // Очищаем обработанные сообщения
+                                Redis::del("sse_queue:{$channel}");
+                            }
                         }
-                        flush();
-
-                    } catch (\Exception $e) {
-                        Log::error('Chat list SSE error', [
-                            'error' => $e->getMessage(),
-                            'message' => $message
-                        ]);
                     }
-                });
+                    
+                    // Небольшая пауза чтобы не перегружать CPU
+                    usleep(100000); // 0.1 секунды
+                    
+                    // Проверяем, не разорвалось ли соединение
+                    if (connection_aborted()) {
+                        break;
+                    }
+                }
             },
             200,
             [

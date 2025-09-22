@@ -336,25 +336,118 @@ class MessageService implements MessageServiceInterface
             $chatType = 'whatsapp';
             $chatId = $chat->messenger_phone;
 
-            // Форматируем сообщение с именем пользователя
-            $formattedMessage = "*{$user->name}*\n\n{$message->content}";
+            // Проверяем тип сообщения и отправляем соответствующим методом
+            if ($message->type === 'image' && isset($message->metadata['file_path'])) {
+                // Отправляем изображение
+                $imageUrl = $message->metadata['file_path'];
 
-            Log::info('🔹 БЭК: Отправляем сообщение через Wazzup24 API', [
-                'channel_id' => $channelId,
-                'chat_type' => $chatType,
-                'chat_id' => $chatId,
-                'message_length' => strlen($formattedMessage),
-                'user_name' => $user->name
-            ]);
+                Log::info('🔹 БЭК: Отправляем изображение через Wazzup24 API', [
+                    'channel_id' => $channelId,
+                    'chat_type' => $chatType,
+                    'chat_id' => $chatId,
+                    'image_url' => $imageUrl,
+                    'user_name' => $user->name
+                ]);
 
-            $result = $wazzupService->sendMessage(
-                $channelId,
-                $chatType,
-                $chatId,
-                $formattedMessage,
-                $user->id,
-                $message->id
-            );
+                $result = $wazzupService->sendImage(
+                    $channelId,
+                    $chatType,
+                    $chatId,
+                    $imageUrl,
+                    null, // Не отправляем подпись с изображением
+                    $user->id,
+                    $message->id
+                );
+
+                // Если изображение отправилось успешно и есть подпись, отправляем её отдельным сообщением
+                if ($result['success'] && !empty($message->content)) {
+                    $caption = "*{$user->name}*\n\n{$message->content}";
+                    
+                    Log::info('🔹 БЭК: Отправляем подпись к изображению', [
+                        'caption' => $caption
+                    ]);
+                    
+                    $captionResult = $wazzupService->sendMessage(
+                        $channelId,
+                        $chatType,
+                        $chatId,
+                        $caption,
+                        $user->id,
+                        $message->id
+                    );
+                    
+                    if (!$captionResult['success']) {
+                        Log::warning('Не удалось отправить подпись к изображению', [
+                            'error' => $captionResult['error']
+                        ]);
+                    }
+                }
+            } elseif ($message->type === 'video' && isset($message->metadata['file_path'])) {
+                // Отправляем видео
+                $videoUrl = $message->metadata['file_path'];
+
+                Log::info('🔹 БЭК: Отправляем видео через Wazzup24 API', [
+                    'channel_id' => $channelId,
+                    'chat_type' => $chatType,
+                    'chat_id' => $chatId,
+                    'video_url' => $videoUrl,
+                    'user_name' => $user->name
+                ]);
+
+                $result = $wazzupService->sendVideo(
+                    $channelId,
+                    $chatType,
+                    $chatId,
+                    $videoUrl,
+                    null, // Не отправляем подпись с видео
+                    $user->id,
+                    $message->id
+                );
+
+                // Если видео отправилось успешно и есть подпись, отправляем её отдельным сообщением
+                if ($result['success'] && !empty($message->content)) {
+                    $caption = "*{$user->name}*\n\n{$message->content}";
+                    
+                    Log::info('🔹 БЭК: Отправляем подпись к видео', [
+                        'caption' => $caption
+                    ]);
+                    
+                    $captionResult = $wazzupService->sendMessage(
+                        $channelId,
+                        $chatType,
+                        $chatId,
+                        $caption,
+                        $user->id,
+                        $message->id
+                    );
+                    
+                    if (!$captionResult['success']) {
+                        Log::warning('Не удалось отправить подпись к видео', [
+                            'error' => $captionResult['error']
+                        ]);
+                    }
+                }
+            } else {
+                // Отправляем текстовое сообщение
+                $formattedMessage = "*{$user->name}*\n\n{$message->content}";
+
+                Log::info('🔹 БЭК: Отправляем сообщение через Wazzup24 API', [
+                    'channel_id' => $channelId,
+                    'chat_type' => $chatType,
+                    'chat_id' => $chatId,
+                    'message_length' => strlen($formattedMessage),
+                    'user_name' => $user->name
+                ]);
+
+                $result = $wazzupService->sendMessage(
+                    $channelId,
+                    $chatType,
+                    $chatId,
+                    $formattedMessage,
+                    $user->id,
+                    $message->id
+                );
+            }
 
             if ($result['success']) {
                 // Обновляем сообщение с ID от Wazzup24

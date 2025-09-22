@@ -7,6 +7,7 @@ use App\Http\Controllers\ChatTransferController;
 use App\Http\Controllers\OrganizationController as LegacyOrganizationController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\Api\Wazzup24Controller;
+use App\Http\Controllers\Api\FileUploadController;
 use App\Http\Controllers\OrganizationWazzupController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\Api\AuthApiController;
@@ -86,22 +87,27 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
     // User info
     Route::get('/user', function (Request $request) {
-        $user = $request->user();
+        try {
+            $user = $request->user();
 
-        // Загружаем связанные данные
-        $user->load(['department', 'positions' => function($query) {
-            $query->wherePivot('is_primary', true);
-        }]);
+            // Загружаем связанные данные
+            $user->load(['department', 'positions' => function($query) {
+                $query->wherePivot('is_primary', true);
+            }]);
 
-        return response()->json([
-            'user' => $user,
-            'permissions' => $user->getAvailablePermissions(),
-            'roles' => [$user->role],
-            'has_position_and_department' => $user->hasPositionAndDepartment(),
-            'primary_position' => $user->primaryPosition(),
-            'department' => $user->department,
-            'access_level' => $user->hasPositionAndDepartment() ? 'employee_with_position' : $user->role
-        ]);
+            return response()->json([
+                'user' => $user,
+                'permissions' => $user->getAvailablePermissions(),
+                'roles' => [$user->role],
+                'has_position_and_department' => $user->hasPositionAndDepartment(),
+                'primary_position' => $user->primaryPosition(),
+                'department' => $user->department,
+                'access_level' => $user->hasPositionAndDepartment() ? 'employee_with_position' : $user->role
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('User endpoint error: ' . $e->getMessage());
+            return response()->json(['error' => 'Internal server error'], 500);
+        }
     });
 
     // Auth management
@@ -307,8 +313,15 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
     // Wazzup24 API routes
     Route::prefix('wazzup24')->group(function () {
         Route::post('/chats/{chat}/send', [Wazzup24Controller::class, 'sendMessage']);
+        Route::post('/chats/{chat}/send-media', [Wazzup24Controller::class, 'sendMedia']);
         Route::get('/connection', [Wazzup24Controller::class, 'checkConnection']);
         Route::get('/chats/{chat}/info', [Wazzup24Controller::class, 'getChatInfo']);
+    });
+
+    // File upload routes
+    Route::prefix('upload')->group(function () {
+        Route::post('/file', [FileUploadController::class, 'uploadFile']);
+        Route::delete('/file', [FileUploadController::class, 'deleteFile']);
     });
 });
 

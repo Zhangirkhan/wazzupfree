@@ -23,7 +23,7 @@ class MessengerService
     /**
      * Обработка входящего сообщения в мессенджере
      */
-    public function handleIncomingMessage($phone, $message, $contactData = null, $organization = null)
+    public function handleIncomingMessage($phone, $message, $contactData = null, $organization = null, $wazzupMessageId = null)
     {
         try {
                     Log::info('Processing message', [
@@ -45,7 +45,7 @@ class MessengerService
 
             // Обрабатываем сообщение в зависимости от статуса
             // (сохранение сообщения происходит внутри processMessage)
-            $this->processMessage($chat, $message, $client);
+            $this->processMessage($chat, $message, $client, $wazzupMessageId);
 
             return [
                 'success' => true,
@@ -69,7 +69,7 @@ class MessengerService
     /**
      * Обработка входящего изображения в мессенджере
      */
-    public function handleIncomingImage($phone, $imageUrl, $caption = '', $contactData = null, $organization = null)
+    public function handleIncomingImage($phone, $imageUrl, $caption = '', $contactData = null, $organization = null, $wazzupMessageId = null)
     {
         try {
             Log::info('Processing image', [
@@ -91,7 +91,7 @@ class MessengerService
             ]);
 
             // Сохраняем изображение
-            $this->saveClientImage($chat, $imageUrl, $caption, $client);
+            $this->saveClientImage($chat, $imageUrl, $caption, $client, $wazzupMessageId);
 
             // Если это новый чат, отправляем меню только один раз
             if ($chat->wasRecentlyCreated) {
@@ -181,12 +181,12 @@ class MessengerService
     /**
      * Обработка сообщения в зависимости от статуса чата
      */
-    protected function processMessage($chat, $message, $client)
+    protected function processMessage($chat, $message, $client, $wazzupMessageId = null)
     {
         $message = trim($message);
 
         // Сохраняем каждое входящее сообщение клиента
-        $this->saveClientMessage($chat, $message, $client);
+        $this->saveClientMessage($chat, $message, $client, $wazzupMessageId);
 
         // Если это новый чат, отправляем меню только один раз
         if ($chat->wasRecentlyCreated) {
@@ -548,7 +548,7 @@ class MessengerService
     /**
      * Сохранение сообщения клиента
      */
-    protected function saveClientMessage($chat, $message, $client)
+    protected function saveClientMessage($chat, $message, $client, $wazzupMessageId = null)
     {
         Log::info('💬 Saving client message', [
             'chat_id' => $chat->id,
@@ -557,6 +557,18 @@ class MessengerService
             'phone' => $chat->messenger_phone
         ]);
 
+        $metadata = [
+            'original_message' => $message,
+            'client_id' => $client->id,
+            'client_name' => $client->name,
+            'direction' => 'incoming'
+        ];
+
+        // Добавляем wazzup_message_id если есть
+        if ($wazzupMessageId) {
+            $metadata['wazzup_message_id'] = $wazzupMessageId;
+        }
+
         $messageRecord = Message::create([
             'chat_id' => $chat->id,
             'user_id' => 1, // Используем системного пользователя для всех сообщений
@@ -564,12 +576,7 @@ class MessengerService
             'type' => 'text',
             'is_from_client' => true, // Это сообщение от клиента
             'messenger_message_id' => 'client_' . time() . '_' . rand(1000, 9999),
-            'metadata' => [
-                'original_message' => $message,
-                'client_id' => $client->id,
-                'client_name' => $client->name,
-                'direction' => 'incoming'
-            ]
+            'metadata' => $metadata
         ]);
 
         Log::info('✅ Client message saved', [
@@ -586,7 +593,7 @@ class MessengerService
     /**
      * Сохранение изображения клиента
      */
-    protected function saveClientImage($chat, $imageUrl, $caption, $client)
+    protected function saveClientImage($chat, $imageUrl, $caption, $client, $wazzupMessageId = null)
     {
         try {
             // Используем ImageService для сохранения изображения
@@ -604,24 +611,35 @@ class MessengerService
             // Создаем сообщение с изображением
             $messageContent = !empty($caption) ? $caption : 'Изображение';
 
-            Message::create([
+            $metadata = [
+                'image_url' => $imageData['url'],
+                'image_path' => $imageData['path'],
+                'image_filename' => $imageData['filename'],
+                'image_size' => $imageData['size'],
+                'image_extension' => $imageData['extension'],
+                'original_url' => $imageUrl,
+                'caption' => $caption,
+                'client_id' => $client->id,
+                'client_name' => $client->name,
+                'direction' => 'incoming'
+            ];
+
+            // Добавляем wazzup_message_id если есть
+            if ($wazzupMessageId) {
+                $metadata['wazzup_message_id'] = $wazzupMessageId;
+            }
+
+            $message = Message::create([
                 'chat_id' => $chat->id,
                 'user_id' => 1, // Используем системного пользователя
                 'content' => $messageContent,
                 'type' => 'image',
-                'metadata' => [
-                    'image_url' => $imageData['url'],
-                    'image_path' => $imageData['path'],
-                    'image_filename' => $imageData['filename'],
-                    'image_size' => $imageData['size'],
-                    'image_extension' => $imageData['extension'],
-                    'original_url' => $imageUrl,
-                    'caption' => $caption,
-                    'client_id' => $client->id,
-                    'client_name' => $client->name,
-                    'direction' => 'incoming'
-                ]
+                'is_from_client' => true, // Это сообщение от клиента
+                'metadata' => $metadata
             ]);
+
+            // Публикуем сообщение в Redis для SSE
+            $this->publishMessageToRedis($chat->id, $message);
 
             Log::info('Client image saved successfully', [
                 'chat_id' => $chat->id,
@@ -660,11 +678,12 @@ class MessengerService
             // Создаем сообщение с видео
             $messageContent = !empty($caption) ? $caption : 'Видео';
 
-            Message::create([
+            $message = Message::create([
                 'chat_id' => $chat->id,
                 'user_id' => 1, // Используем системного пользователя
                 'content' => $messageContent,
                 'type' => 'video',
+                'is_from_client' => true, // Это сообщение от клиента
                 'metadata' => [
                     'video_url' => $videoData['url'],
                     'video_path' => $videoData['path'],
@@ -678,6 +697,9 @@ class MessengerService
                 ]
             ]);
 
+            // Публикуем сообщение в Redis для SSE
+            $this->publishMessageToRedis($chat->id, $message);
+
             Log::info('Client video saved successfully', [
                 'chat_id' => $chat->id,
                 'video_url' => $videoData['url'],
@@ -688,6 +710,49 @@ class MessengerService
             Log::error('Error saving client video', [
                 'chat_id' => $chat->id,
                 'video_url' => $videoUrl,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+        }
+    }
+
+    /**
+     * Сохранение аудио клиента
+     */
+    protected function saveClientAudio($chat, $audioUrl, $caption, $client)
+    {
+        try {
+            // Создаем сообщение с аудио (пока что без специального сервиса)
+            $messageContent = !empty($caption) ? $caption : 'Аудио сообщение';
+
+            $message = Message::create([
+                'chat_id' => $chat->id,
+                'user_id' => 1, // Используем системного пользователя
+                'content' => $messageContent,
+                'type' => 'audio',
+                'is_from_client' => true, // Это сообщение от клиента
+                'metadata' => [
+                    'audio_url' => $audioUrl,
+                    'original_url' => $audioUrl,
+                    'caption' => $caption,
+                    'client_name' => $client->id,
+                    'direction' => 'incoming'
+                ]
+            ]);
+
+            // Публикуем сообщение в Redis для SSE
+            $this->publishMessageToRedis($chat->id, $message);
+
+            Log::info('Client audio saved successfully', [
+                'chat_id' => $chat->id,
+                'audio_url' => $audioUrl,
+                'caption' => $caption
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error saving client audio', [
+                'chat_id' => $chat->id,
+                'audio_url' => $audioUrl,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -739,6 +804,62 @@ class MessengerService
 
         } catch (\Exception $e) {
             Log::error('Error in handleIncomingSticker:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    /**
+     * Обработка входящего аудио
+     */
+    public function handleIncomingAudio($phone, $audioUrl, $caption = '', $contactData = null)
+    {
+        try {
+            Log::info('Processing audio', [
+                'phone' => $phone,
+                'audio_url' => $audioUrl,
+                'caption' => $caption
+            ]);
+
+            // Находим или создаем клиента с контактами
+            $client = $this->findOrCreateClient($phone, $contactData);
+            Log::info('Client found', ['client_id' => $client->id]);
+
+            // Находим или создаем чат
+            $chat = $this->findOrCreateMessengerChat($phone, $client);
+            $isNewChat = $chat->wasRecentlyCreated;
+            Log::info('Chat found', [
+                'chat_id' => $chat->id,
+                'status' => $chat->messenger_status
+            ]);
+
+            // Сохраняем аудио
+            $this->saveClientAudio($chat, $audioUrl, $caption, $client);
+
+            // Если это новый чат, отправляем меню только один раз
+            if ($chat->wasRecentlyCreated) {
+                $this->sendInitialMenu($chat, $client);
+                return [
+                    'success' => true,
+                    'chat_id' => $chat->id,
+                    'message_id' => $chat->messages()->latest()->first()->id ?? null
+                ];
+            }
+
+            return [
+                'success' => true,
+                'chat_id' => $chat->id,
+                'message_id' => $chat->messages()->latest()->first()->id ?? null
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Error in handleIncomingAudio:', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
@@ -807,62 +928,6 @@ class MessengerService
         }
     }
 
-    /**
-     * Обработка входящего аудио - УДАЛЕНО
-     * Аудио больше не поддерживается
-     */
-    public function handleIncomingAudio($phone, $audioUrl, $caption = '', $contactData = null)
-    {
-        try {
-            Log::info('Processing audio', [
-                'phone' => $phone,
-                'audio_url' => $audioUrl,
-                'caption' => $caption
-            ]);
-
-            // Находим или создаем клиента с контактами
-            $client = $this->findOrCreateClient($phone, $contactData);
-            Log::info('Client found', ['client_id' => $client->id]);
-
-            // Находим или создаем чат
-            $chat = $this->findOrCreateMessengerChat($phone, $client);
-            $isNewChat = $chat->wasRecentlyCreated;
-            Log::info('Chat found', [
-                'chat_id' => $chat->id,
-                'status' => $chat->messenger_status
-            ]);
-
-            // Сохраняем аудио
-            $this->saveClientAudio($chat, $audioUrl, $caption, $client);
-
-            // Если это новый чат, отправляем меню только один раз
-            if ($chat->wasRecentlyCreated) {
-                $this->sendInitialMenu($chat, $client);
-                return [
-                    'success' => true,
-                    'chat_id' => $chat->id,
-                    'message_id' => $chat->messages()->latest()->first()->id ?? null
-                ];
-            }
-
-            return [
-                'success' => true,
-                'chat_id' => $chat->id,
-                'message_id' => $chat->messages()->latest()->first()->id ?? null
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('Error in handleIncomingAudio:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return [
-                'success' => false,
-                'error' => $e->getMessage()
-            ];
-        }
-    }
 
     /**
      * Обработка входящей локации
@@ -998,11 +1063,12 @@ class MessengerService
             // Создаем сообщение с документом
             $messageContent = !empty($caption) ? $caption : $documentName;
 
-            Message::create([
+            $message = Message::create([
                 'chat_id' => $chat->id,
                 'user_id' => 1, // Используем системного пользователя
                 'content' => $messageContent,
                 'type' => 'document',
+                'is_from_client' => true, // Это сообщение от клиента
                 'metadata' => [
                     'document_url' => $documentData['url'],
                     'document_path' => $documentData['path'],
@@ -1017,6 +1083,9 @@ class MessengerService
                     'direction' => 'incoming'
                 ]
             ]);
+
+            // Публикуем сообщение в Redis для SSE
+            $this->publishMessageToRedis($chat->id, $message);
 
             Log::info('Client document saved successfully', [
                 'chat_id' => $chat->id,
@@ -1035,67 +1104,6 @@ class MessengerService
         }
     }
 
-    /**
-     * Сохранение аудио клиента
-     */
-    protected function saveClientAudio($chat, $audioUrl, $caption, $client)
-    {
-        try {
-            // Сохраняем аудио через сервис
-            $audioService = app(\App\Services\AudioService::class);
-            $audioData = $audioService->saveAudioFromUrl($audioUrl, $chat->id);
-
-            if (!$audioData) {
-                Log::error('Failed to save audio', [
-                    'chat_id' => $chat->id,
-                    'audio_url' => $audioUrl
-                ]);
-                return;
-            }
-
-            // Создаем сообщение с аудио
-            $messageContent = !empty($caption) ? $caption : 'Аудио сообщение';
-
-            $message = Message::create([
-                'chat_id' => $chat->id,
-                'user_id' => 1, // Используем системного пользователя
-                'content' => $messageContent,
-                'type' => 'audio',
-                'metadata' => [
-                    'file_path' => $audioData['url'],
-                    'file_name' => $audioData['filename'],
-                    'file_size' => $audioData['size'],
-                    'audio_url' => $audioData['url'],
-                    'audio_path' => $audioData['path'],
-                    'audio_filename' => $audioData['filename'],
-                    'audio_size' => $audioData['size'],
-                    'audio_extension' => $audioData['extension'],
-                    'original_url' => $audioUrl,
-                    'caption' => $caption,
-                    'client_id' => $client->id,
-                    'client_name' => $client->name,
-                    'direction' => 'incoming'
-                ]
-            ]);
-
-            // Публикуем событие для SSE
-            $this->publishMessageToRedis($chat->id, $message);
-
-            Log::info('Client audio saved successfully', [
-                'chat_id' => $chat->id,
-                'audio_url' => $audioData['url'],
-                'caption' => $caption
-            ]);
-
-        } catch (\Exception $e) {
-            Log::error('Error saving client audio', [
-                'chat_id' => $chat->id,
-                'audio_url' => $audioUrl,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-        }
-    }
 
     /**
      * Сохранение локации клиента
@@ -1511,6 +1519,55 @@ class MessengerService
                 'organization_id' => $organizationId,
                 'phone' => $phone
             ]);
+
+            // Отправляем уведомление о создании нового чата
+            try {
+                $chatData = [
+                    'type' => 'chat_created',
+                    'chat' => [
+                        'id' => $chat->id,
+                        'title' => $chat->title,
+                        'organization_id' => $chat->organization_id,
+                        'status' => $chat->status,
+                        'created_at' => $chat->created_at->toISOString(),
+                        'last_activity_at' => $chat->last_activity_at->toISOString(),
+                        'is_messenger_chat' => $chat->is_messenger_chat,
+                        'messenger_phone' => $chat->messenger_phone,
+                        'unread_count' => 0
+                    ]
+                ];
+
+                // Отправляем в глобальный канал (используем списки для SSE)
+                Redis::lpush('sse_queue:chats.global', json_encode($chatData));
+                Redis::expire('sse_queue:chats.global', 3600); // TTL 1 час
+
+                // Также отправляем в канал организации
+                if ($chat->organization_id) {
+                    Redis::lpush('sse_queue:organization.' . $chat->organization_id . '.chats', json_encode($chatData));
+                    Redis::expire('sse_queue:organization.' . $chat->organization_id . '.chats', 3600);
+                } else {
+                    // Для чатов без организации отправляем в специальный канал
+                    Redis::lpush('sse_queue:chats.no_organization', json_encode($chatData));
+                    Redis::expire('sse_queue:chats.no_organization', 3600);
+                }
+
+                // Отправляем всем активным пользователям (fallback)
+                $activeUsers = \App\Models\User::whereNotNull('id')->pluck('id');
+                foreach ($activeUsers as $userId) {
+                    Redis::lpush('sse_queue:user.' . $userId . '.chats', json_encode($chatData));
+                    Redis::expire('sse_queue:user.' . $userId . '.chats', 3600);
+                }
+
+                Log::info('📡 New chat notification sent via Redis', [
+                    'chat_id' => $chat->id,
+                    'organization_id' => $chat->organization_id
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Failed to send new chat notification', [
+                    'chat_id' => $chat->id,
+                    'error' => $e->getMessage()
+                ]);
+            }
         }
 
         return $chat;
@@ -1853,7 +1910,7 @@ class MessengerService
     /**
      * Отправка сообщения в Redis для SSE
      */
-    private function publishMessageToRedis(int $chatId, Message $message): void
+    public function publishMessageToRedis(int $chatId, Message $message): void
     {
         try {
             // Загружаем пользователя для сообщения
@@ -1870,9 +1927,9 @@ class MessengerService
                     'is_from_client' => $message->is_from_client,
                     'is_read' => false,
                     'read_at' => null,
-                    'file_path' => $message->metadata['file_path'] ?? null,
-                    'file_name' => $message->metadata['file_name'] ?? null,
-                    'file_size' => $message->metadata['file_size'] ?? null,
+                    'file_path' => $message->metadata['image_url'] ?? $message->metadata['video_url'] ?? $message->metadata['audio_url'] ?? $message->metadata['document_url'] ?? $message->metadata['file_path'] ?? null,
+                    'file_name' => $message->metadata['image_filename'] ?? $message->metadata['video_filename'] ?? $message->metadata['audio_filename'] ?? $message->metadata['document_filename'] ?? $message->metadata['file_name'] ?? null,
+                    'file_size' => $message->metadata['image_size'] ?? $message->metadata['video_size'] ?? $message->metadata['audio_size'] ?? $message->metadata['document_size'] ?? $message->metadata['file_size'] ?? null,
                     'created_at' => $message->created_at->toISOString(),
                     'user' => [
                         'id' => $message->user->id,
@@ -1886,8 +1943,9 @@ class MessengerService
                 'timestamp' => now()->toISOString()
             ];
 
-            // Публикуем в Redis канал чата
-            Redis::publish('chat.' . $chatId, json_encode($data));
+            // Отправляем в Redis список чата (для SSE)
+            Redis::lpush("sse_queue:chat.{$chatId}", json_encode($data));
+            Redis::expire("sse_queue:chat.{$chatId}", 3600); // TTL 1 час
 
             // Также отправляем в глобальные каналы для обновления списка чатов
             if ($message->is_from_client) {
@@ -1902,20 +1960,24 @@ class MessengerService
                         'timestamp' => now()->toISOString()
                     ];
 
-                    // Отправляем в глобальный канал чатов
-                    Redis::publish('chats.global', json_encode($chatUpdateData));
+                    // Отправляем в глобальный канал чатов (используем списки для SSE)
+                    Redis::lpush('sse_queue:chats.global', json_encode($chatUpdateData));
+                    Redis::expire('sse_queue:chats.global', 3600);
 
                     // Отправляем в канал организации
                     if ($chat->organization_id) {
-                        Redis::publish('organization.' . $chat->organization_id . '.chats', json_encode($chatUpdateData));
+                        Redis::lpush('sse_queue:organization.' . $chat->organization_id . '.chats', json_encode($chatUpdateData));
+                        Redis::expire('sse_queue:organization.' . $chat->organization_id . '.chats', 3600);
+                    } else {
+                        Redis::lpush('sse_queue:chats.no_organization', json_encode($chatUpdateData));
+                        Redis::expire('sse_queue:chats.no_organization', 3600);
                     }
 
-                    // Отправляем всем пользователям организации через отделы
-                    $users = User::whereHas('department', function($query) use ($chat) {
-                        $query->where('organization_id', $chat->organization_id);
-                    })->pluck('id');
-                    foreach ($users as $userId) {
-                        Redis::publish('user.' . $userId . '.chats', json_encode($chatUpdateData));
+                    // Отправляем всем активным пользователям (fallback)
+                    $activeUsers = User::whereNotNull('id')->pluck('id');
+                    foreach ($activeUsers as $userId) {
+                        Redis::lpush('sse_queue:user.' . $userId . '.chats', json_encode($chatUpdateData));
+                        Redis::expire('sse_queue:user.' . $userId . '.chats', 3600);
                     }
                 }
             }

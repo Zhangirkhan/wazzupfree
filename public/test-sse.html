@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SSE Test</title>
+</head>
+<body>
+    <h1>SSE Test</h1>
+    <div id="messages"></div>
+    
+    <script>
+        const token = '3|DWQ6RvdDOUURO3WzgXRP4uXD309X5ZQBOfzXH70z812235ea';
+        const chatId = 2;
+        
+        const eventSource = new EventSource(`https://back-erp.ap.kz/api/chat-stream/${chatId}/stream?token=${token}`);
+        
+        eventSource.onmessage = function(event) {
+            console.log('SSE message received:', event.data);
+            const data = JSON.parse(event.data);
+            
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.innerHTML = `
+                <h3>Type: ${data.type}</h3>
+                <p>Data: ${JSON.stringify(data, null, 2)}</p>
+                <hr>
+            `;
+            messagesDiv.appendChild(messageDiv);
+        };
+        
+        eventSource.onerror = function(event) {
+            console.error('SSE error:', event);
+        };
+        
+        eventSource.onopen = function(event) {
+            console.log('SSE connection opened');
+        };
+    </script>
+</body>
+</html>
