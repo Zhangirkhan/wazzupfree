@@ -5,6 +5,11 @@ namespace App\Services;
 use App\Models\User;
 use App\Models\Department;
 use App\Models\Organization;
+use App\Contracts\UserRepositoryInterface;
+use App\Contracts\UnitOfWorkInterface;
+use App\Events\UserCreated;
+use App\Exceptions\BusinessLogicException;
+use App\Exceptions\ResourceNotFoundException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -12,49 +17,58 @@ use Illuminate\Support\Facades\Log;
 
 class UserManagementService
 {
+    public function __construct(
+        private UserRepositoryInterface $userRepository,
+        private UnitOfWorkInterface $unitOfWork
+    ) {}
+
     public function getUsers(int $perPage = 20, ?string $search = null, ?string $role = null, ?int $departmentId = null, ?int $organizationId = null): LengthAwarePaginator
     {
-        $query = User::with(['department', 'organizations']);
-
         if ($search) {
-            $query->where(function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
-            });
+            return $this->userRepository->search($search, $perPage);
         }
 
         if ($role) {
-            $query->where('role', $role);
+            return $this->userRepository->getByRole($role);
         }
 
         if ($departmentId) {
-            $query->where('department_id', $departmentId);
+            return $this->userRepository->getByDepartment($departmentId);
         }
 
         if ($organizationId) {
-            $query->whereHas('organizations', function($q) use ($organizationId) {
-                $q->where('organization_id', $organizationId);
-            });
+            return $this->userRepository->getByOrganization($organizationId);
         }
 
-        return $query->orderBy('name')
-                    ->paginate($perPage);
+        return $this->userRepository->getAll($perPage);
     }
 
     public function getUser(int $id): ?User
     {
-        return User::with(['department', 'organizations'])->find($id);
+        return $this->userRepository->findById($id);
     }
 
     public function createUser(array $data): User
     {
-        return DB::transaction(function () use ($data) {
+        return $this->unitOfWork->execute(function ($uow) use ($data) {
             // Проверяем существование отдела, если указан
             if (isset($data['department_id'])) {
-                Department::findOrFail($data['department_id']);
+                $department = Department::find($data['department_id']);
+                if (!$department) {
+                    throw new ResourceNotFoundException('Department', $data['department_id']);
+                }
             }
 
-            $user = User::create([
+            // Проверяем уникальность email
+            if ($this->userRepository->findByEmail($data['email'])) {
+                throw new BusinessLogicException(
+                    'User with this email already exists',
+                    'EMAIL_ALREADY_EXISTS',
+                    ['email' => $data['email']]
+                );
+            }
+
+            $userData = [
                 'name' => $data['name'],
                 'email' => $data['email'],
                 'password' => Hash::make($data['password']),
@@ -63,15 +77,25 @@ class UserManagementService
                 'role' => $data['role'] ?? 'user',
                 'department_id' => $data['department_id'] ?? null,
                 'email_verified_at' => now()
-            ]);
+            ];
+
+            $user = $this->userRepository->create($userData);
 
             // Привязываем к организациям, если указаны
             if (isset($data['organization_ids']) && is_array($data['organization_ids'])) {
                 foreach ($data['organization_ids'] as $orgId) {
-                    Organization::findOrFail($orgId);
+                    $organization = Organization::find($orgId);
+                    if (!$organization) {
+                        throw new ResourceNotFoundException('Organization', $orgId);
+                    }
                 }
                 $user->organizations()->attach($data['organization_ids']);
             }
+
+            // Добавляем операцию отправки события
+            $uow->addOperation(function () use ($user) {
+                event(new UserCreated($user));
+            });
 
             Log::info('User created', [
                 'user_id' => $user->id,
@@ -86,12 +110,19 @@ class UserManagementService
 
     public function updateUser(int $id, array $data): User
     {
-        $user = User::findOrFail($id);
+        $user = $this->userRepository->findById($id);
 
-        return DB::transaction(function () use ($user, $data) {
+        if (!$user) {
+            throw new ResourceNotFoundException('User', $id);
+        }
+
+        return $this->unitOfWork->execute(function ($uow) use ($user, $data) {
             // Проверяем существование отдела, если указан
             if (isset($data['department_id'])) {
-                Department::findOrFail($data['department_id']);
+                $department = Department::find($data['department_id']);
+                if (!$department) {
+                    throw new ResourceNotFoundException('Department', $data['department_id']);
+                }
             }
 
             $updateData = array_filter([
@@ -104,12 +135,15 @@ class UserManagementService
                 return $value !== null;
             });
 
-            $user->update($updateData);
+            $user = $this->userRepository->update($user, $updateData);
 
             // Обновляем привязку к организациям, если указаны
             if (isset($data['organization_ids']) && is_array($data['organization_ids'])) {
                 foreach ($data['organization_ids'] as $orgId) {
-                    Organization::findOrFail($orgId);
+                    $organization = Organization::find($orgId);
+                    if (!$organization) {
+                        throw new ResourceNotFoundException('Organization', $orgId);
+                    }
                 }
                 $user->organizations()->sync($data['organization_ids']);
             }
@@ -170,20 +204,34 @@ class UserManagementService
 
     public function deleteUser(int $id): bool
     {
-        $user = User::findOrFail($id);
+        $user = $this->userRepository->findById($id);
 
-        // Проверяем, есть ли активные чаты
-        if ($user->chats()->count() > 0 || $user->assignedChats()->count() > 0) {
-            throw new \Exception('Cannot delete user with active chats');
+        if (!$user) {
+            throw new ResourceNotFoundException('User', $id);
         }
 
-        $user->delete();
+        return $this->unitOfWork->execute(function ($uow) use ($user, $id) {
+            // Проверяем, есть ли активные чаты
+            if ($user->chats()->count() > 0 || $user->assignedChats()->count() > 0) {
+                throw new BusinessLogicException(
+                    'Cannot delete user with active chats',
+                    'USER_HAS_ACTIVE_CHATS',
+                    [
+                        'user_id' => $id,
+                        'chats_count' => $user->chats()->count(),
+                        'assigned_chats_count' => $user->assignedChats()->count()
+                    ]
+                );
+            }
 
-        Log::info('User deleted', [
-            'user_id' => $id
-        ]);
+            $result = $this->userRepository->delete($user);
 
-        return true;
+            Log::info('User deleted', [
+                'user_id' => $id
+            ]);
+
+            return $result;
+        });
     }
 
     public function getRoles(): array

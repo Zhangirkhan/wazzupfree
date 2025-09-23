@@ -2,37 +2,55 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Models\Chat;
+use Illuminate\Validation\Rule;
 
-class CreateChatRequest extends FormRequest
+class CreateChatRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return auth()->user()->can('create', Chat::class);
     }
 
     public function rules(): array
     {
         return [
-            'client_name' => 'required|string|max:255',
-            'client_phone' => 'required|string|max:20',
-            'client_email' => 'nullable|email|max:255',
-            'message' => 'required|string',
-            'department_id' => 'nullable|exists:departments,id'
+            'title' => 'required|string|max:255',
+            'client_id' => 'required|exists:clients,id',
+            'department_id' => 'nullable|exists:departments,id',
+            'assigned_to' => 'nullable|exists:users,id',
+            'type' => ['required', Rule::in(['support', 'sales', 'general'])],
+            'status' => ['sometimes', Rule::in(['active', 'pending', 'closed'])],
+            'is_messenger_chat' => 'boolean',
+            'messenger_phone' => 'nullable|string|max:20',
+            'messenger_status' => 'nullable|string|max:50'
         ];
     }
 
     public function messages(): array
     {
         return [
-            'client_name.required' => 'Имя клиента обязательно',
-            'client_name.max' => 'Имя клиента не должно превышать 255 символов',
-            'client_phone.required' => 'Телефон клиента обязателен',
-            'client_phone.max' => 'Телефон не должен превышать 20 символов',
-            'client_email.email' => 'Некорректный email адрес',
-            'client_email.max' => 'Email не должен превышать 255 символов',
-            'message.required' => 'Сообщение обязательно',
-            'department_id.exists' => 'Указанный отдел не существует'
+            'title.required' => 'Название чата обязательно',
+            'title.max' => 'Название не должно превышать 255 символов',
+            'client_id.required' => 'Клиент обязателен',
+            'client_id.exists' => 'Указанный клиент не существует',
+            'department_id.exists' => 'Указанный отдел не существует',
+            'assigned_to.exists' => 'Указанный пользователь не существует',
+            'type.required' => 'Тип чата обязателен',
+            'type.in' => 'Недопустимый тип чата',
+            'status.in' => 'Недопустимый статус чата'
+        ];
+    }
+
+    public function attributes(): array
+    {
+        return [
+            'title' => 'название',
+            'client_id' => 'клиент',
+            'department_id' => 'отдел',
+            'assigned_to' => 'назначенный пользователь',
+            'type' => 'тип',
+            'status' => 'статус'
         ];
     }
 }

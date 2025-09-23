@@ -3,14 +3,18 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Resources\UserResource;
+use App\Http\Requests\CreateUserRequest;
+use App\Http\Requests\UpdateUserRequest;
 use App\Services\UserManagementService;
+use App\Services\LoggingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
 class UserManagementController extends ApiController
 {
     public function __construct(
-        private UserManagementService $userManagementService
+        private UserManagementService $userManagementService,
+        private LoggingService $loggingService
     ) {}
 
     /**
@@ -60,22 +64,16 @@ class UserManagementController extends ApiController
     /**
      * Создать пользователя
      */
-    public function store(Request $request): JsonResponse
+    public function store(CreateUserRequest $request): JsonResponse
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:8',
-            'phone' => 'nullable|string|max:20',
-            'position' => 'nullable|string|max:255',
-            'role' => 'required|in:admin,manager,employee,user',
-            'department_id' => 'nullable|exists:departments,id',
-            'organization_ids' => 'nullable|array',
-            'organization_ids.*' => 'exists:organizations,id'
-        ]);
-
         try {
-            $user = $this->userManagementService->createUser($request->all());
+            $user = $this->userManagementService->createUser($request->validated());
+            
+            $this->loggingService->logUserAction('user_created', [
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email
+            ]);
 
             return $this->successResponse(
                 new UserResource($user),
@@ -83,6 +81,10 @@ class UserManagementController extends ApiController
                 201
             );
         } catch (\Exception $e) {
+            $this->loggingService->logError('Failed to create user', [
+                'error' => $e->getMessage(),
+                'request_data' => $request->validated()
+            ]);
             return $this->errorResponse('Failed to create user', $e->getMessage(), 500);
         }
     }
@@ -90,26 +92,27 @@ class UserManagementController extends ApiController
     /**
      * Обновить пользователя
      */
-    public function update(Request $request, int $id): JsonResponse
+    public function update(UpdateUserRequest $request, int $id): JsonResponse
     {
-        $request->validate([
-            'name' => 'sometimes|string|max:255',
-            'phone' => 'nullable|string|max:20',
-            'position' => 'nullable|string|max:255',
-            'role' => 'sometimes|in:admin,manager,employee,user',
-            'department_id' => 'nullable|exists:departments,id',
-            'organization_ids' => 'nullable|array',
-            'organization_ids.*' => 'exists:organizations,id'
-        ]);
-
         try {
-            $user = $this->userManagementService->updateUser($id, $request->all());
+            $user = $this->userManagementService->updateUser($id, $request->validated());
+            
+            $this->loggingService->logUserAction('user_updated', [
+                'user_id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email
+            ]);
 
             return $this->successResponse(
                 new UserResource($user),
                 'User updated successfully'
             );
         } catch (\Exception $e) {
+            $this->loggingService->logError('Failed to update user', [
+                'error' => $e->getMessage(),
+                'user_id' => $id,
+                'request_data' => $request->validated()
+            ]);
             return $this->errorResponse('Failed to update user', $e->getMessage(), 500);
         }
     }

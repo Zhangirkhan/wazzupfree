@@ -20,6 +20,13 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(AuthServiceInterface::class, AuthService::class);
         $this->app->bind(ChatServiceInterface::class, ChatService::class);
         $this->app->bind(MessageServiceInterface::class, MessageService::class);
+        
+            // Регистрируем новые сервисы
+            $this->app->singleton(\App\Services\CacheService::class);
+            $this->app->singleton(\App\Services\NotificationService::class);
+            $this->app->singleton(\App\Services\LoggingService::class);
+            $this->app->singleton(\App\Contracts\UnitOfWorkInterface::class, \App\Services\UnitOfWorkService::class);
+            $this->app->singleton(\App\Contracts\SagaInterface::class, \App\Services\SagaService::class);
     }
 
     /**

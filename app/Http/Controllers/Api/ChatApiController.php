@@ -9,6 +9,7 @@ use App\Http\Requests\SendMessageRequest;
 use App\Http\Requests\TransferChatRequest;
 use App\Http\Resources\ChatResource;
 use App\Http\Resources\MessageResource;
+use App\Services\LoggingService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -18,7 +19,8 @@ class ChatApiController extends ApiController
 {
     public function __construct(
         private ChatServiceInterface $chatService,
-        private MessageServiceInterface $messageService
+        private MessageServiceInterface $messageService,
+        private LoggingService $loggingService
     ) {}
     /**
      * Получить список чатов пользователя
@@ -43,9 +45,19 @@ class ChatApiController extends ApiController
         try {
             $user = Auth::user();
             $chat = $this->chatService->createChat($request->validated(), $user);
+            
+            $this->loggingService->logChatActivity('chat_created', $chat->id, [
+                'user_id' => $user->id,
+                'title' => $chat->title
+            ]);
 
             return $this->successResponse(new ChatResource($chat), 'Chat created successfully', 201);
         } catch (\Exception $e) {
+            $this->loggingService->logError('Failed to create chat', [
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id(),
+                'request_data' => $request->validated()
+            ]);
             return $this->errorResponse('Failed to create chat', $e->getMessage(), 500);
         }
     }

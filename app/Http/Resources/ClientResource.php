@@ -3,15 +3,9 @@
 namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
 
-class ClientResource extends JsonResource
+class ClientResource extends BaseResource
 {
-    /**
-     * Transform the resource into an array.
-     *
-     * @return array<string, mixed>
-     */
     public function toArray(Request $request): array
     {
         return [
@@ -19,16 +13,21 @@ class ClientResource extends JsonResource
             'name' => $this->name,
             'phone' => $this->phone,
             'email' => $this->email,
-            'uuid_wazzup' => $this->uuid_wazzup,
-            'comment' => $this->comment,
-            'avatar' => $this->avatar,
             'is_active' => $this->is_active,
-            'contractor_id' => $this->contractor_id,
-            'contractor' => new ContractorResource($this->whenLoaded('contractor')),
-            'company_id' => $this->company_id,
-            'company' => new CompanyResource($this->whenLoaded('company')),
-            'created_at' => $this->created_at->toISOString(),
-            'updated_at' => $this->updated_at->toISOString(),
+            'status' => $this->is_active ? 'active' : 'inactive',
+            'status_label' => $this->getStatusLabel($this->is_active ? 'active' : 'inactive'),
+            'status_severity' => $this->getStatusSeverity($this->is_active ? 'active' : 'inactive'),
+            'organization' => $this->whenLoaded('organization', function() {
+                return new OrganizationResource($this->organization);
+            }),
+            'company' => $this->whenLoaded('company', function() {
+                return new CompanyResource($this->company);
+            }),
+            'chats_count' => $this->whenLoaded('chats', function() {
+                return $this->chats->count();
+            }),
+            'created_at' => $this->formatDateTime($this->created_at),
+            'updated_at' => $this->formatDateTime($this->updated_at)
         ];
     }
 }

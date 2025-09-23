@@ -8,6 +8,9 @@ use App\Exceptions\UnauthorizedChatAccessException;
 use App\Models\Chat;
 use App\Models\Message;
 use App\Models\User;
+use App\Contracts\ChatRepositoryInterface;
+use App\Events\ChatCreated;
+use App\Events\ChatAssigned;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -15,39 +18,34 @@ use Illuminate\Support\Facades\Redis;
 
 class ChatService implements ChatServiceInterface
 {
+    public function __construct(
+        private ChatRepositoryInterface $chatRepository
+    ) {}
+
     public function getUserChats(User $user, int $perPage = 20): LengthAwarePaginator
     {
         // Администратор видит все чаты
         if ($user->role === 'admin') {
-            return Chat::with(['creator', 'assignedTo', 'messages' => function($query) {
-                $query->latest()->limit(1);
-            }])
-            ->orderBy('updated_at', 'desc')
-            ->paginate($perPage);
+            return $this->chatRepository->getAll($perPage);
         }
 
         // Обычные пользователи видят только свои чаты
-        return Chat::where('created_by', $user->id)
-            ->orWhere('assigned_to', $user->id)
-            ->with(['creator', 'assignedTo', 'messages' => function($query) {
-                $query->latest()->limit(1);
-            }])
-            ->orderBy('updated_at', 'desc')
-            ->paginate($perPage);
+        return $this->chatRepository->getByUser($user->id, $perPage);
     }
 
     public function createChat(array $data, User $user): Chat
     {
         return DB::transaction(function () use ($data, $user) {
-            $chat = Chat::create([
+            $chatData = [
                 'organization_id' => 1, // Используем первую организацию
-                'created_by' => $user->id,
                 'title' => $data['client_name'],
                 'phone' => $data['client_phone'],
                 'department_id' => $data['department_id'] ?? null,
                 'status' => 'active',
                 'assigned_to' => $user->id
-            ]);
+            ];
+
+            $chat = $this->chatRepository->create($chatData, $user);
 
             // Создаем первое сообщение
             Message::create([
@@ -57,6 +55,9 @@ class ChatService implements ChatServiceInterface
                 'type' => 'text',
                 'direction' => 'out'
             ]);
+
+            // Отправляем событие
+            event(new ChatCreated($chat));
 
             Log::info('Chat created successfully', [
                 'chat_id' => $chat->id,
@@ -73,25 +74,18 @@ class ChatService implements ChatServiceInterface
 
     public function getChat(string $id, User $user): ?Chat
     {
-        // Администратор может получить любой чат
-        if ($user->role === 'admin') {
-            $chat = Chat::where('id', $id)
-                ->with(['creator', 'assignedTo', 'messages.user'])
-                ->first();
-        } else {
-            // Обычные пользователи могут получить только свои чаты
-            $chat = Chat::where('id', $id)
-                ->where(function($query) use ($user) {
-                    $query->where('created_by', $user->id)
-                          ->orWhere('assigned_to', $user->id);
-                })
-                ->with(['creator', 'assignedTo', 'messages.user'])
-                ->first();
-        }
+        $chat = $this->chatRepository->findById((int)$id);
 
         if (!$chat) {
             Log::warning('Chat not found', ['chat_id' => $id, 'user_id' => $user->id]);
             throw new ChatNotFoundException();
+        }
+
+        // Проверяем права доступа
+        if ($user->role !== 'admin' && 
+            $chat->created_by !== $user->id && 
+            $chat->assigned_to !== $user->id) {
+            throw new UnauthorizedChatAccessException();
         }
 
         Log::info('Chat accessed', ['chat_id' => $id, 'user_id' => $user->id]);
@@ -102,31 +96,11 @@ class ChatService implements ChatServiceInterface
     {
         // Администратор может искать по всем чатам
         if ($user->role === 'admin') {
-            $chats = Chat::where(function($q) use ($query) {
-                $q->where('title', 'like', "%{$query}%")
-                  ->orWhere('phone', 'like', "%{$query}%");
-            });
+            return $this->chatRepository->search($query, $perPage);
         } else {
             // Обычные пользователи ищут только по своим чатам
-            $chats = Chat::where(function($q) use ($user) {
-                $q->where('created_by', $user->id)
-                  ->orWhere('assigned_to', $user->id);
-            })
-            ->where(function($q) use ($query) {
-                $q->where('title', 'like', "%{$query}%")
-                  ->orWhere('phone', 'like', "%{$query}%");
-            });
+            return $this->chatRepository->getByUser($user->id, $perPage);
         }
-
-        if ($status) {
-            $chats->where('status', $status);
-        }
-
-        return $chats->with(['creator', 'assignedTo', 'messages' => function($query) {
-            $query->latest()->limit(1);
-        }])
-        ->orderBy('updated_at', 'desc')
-        ->paginate($perPage);
     }
 
     public function endChat(string $chatId, User $user): Chat
@@ -143,8 +117,9 @@ class ChatService implements ChatServiceInterface
     {
         return DB::transaction(function () use ($chatId, $assignedTo, $user, $note) {
             $chat = $this->getChat($chatId, $user);
+            $assignedUser = User::findOrFail($assignedTo);
 
-            $chat->update([
+            $chat = $this->chatRepository->update($chat, [
                 'assigned_to' => $assignedTo,
                 'status' => 'transferred'
             ]);
@@ -157,6 +132,9 @@ class ChatService implements ChatServiceInterface
                 'type' => 'system',
                 'direction' => 'out'
             ]);
+
+            // Отправляем событие о назначении чата
+            event(new ChatAssigned($chat, $assignedUser, $user));
 
             Log::info('Chat transferred', [
                 'chat_id' => $chatId,

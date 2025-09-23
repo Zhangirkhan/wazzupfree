@@ -3,41 +3,27 @@
 namespace App\Http\Resources;
 
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
 
-class DepartmentResource extends JsonResource
+class DepartmentResource extends BaseResource
 {
-    /**
-     * Transform the resource into an array.
-     *
-     * @return array<string, mixed>
-     */
     public function toArray(Request $request): array
     {
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'slug' => $this->slug,
             'description' => $this->description,
-            'organization_id' => $this->organization_id,
-            'organization' => new OrganizationResource($this->whenLoaded('organization')),
             'is_active' => $this->is_active,
             'status' => $this->is_active ? 'active' : 'inactive',
-            'show_in_chatbot' => $this->show_in_chatbot,
-            'chatbot_order' => $this->chatbot_order,
-            'leader' => $this->leader ? [
-                'id' => $this->leader->id,
-                'name' => $this->leader->name,
-                'email' => $this->leader->email,
-            ] : null,
-            'created_at' => $this->created_at->toISOString(),
-            'updated_at' => $this->updated_at->toISOString(),
-            'users_count' => $this->when(isset($this->users_count), $this->users_count),
+            'status_label' => $this->getStatusLabel($this->is_active ? 'active' : 'inactive'),
+            'status_severity' => $this->getStatusSeverity($this->is_active ? 'active' : 'inactive'),
+            'organization' => $this->whenLoaded('organization', function() {
+                return new OrganizationResource($this->organization);
+            }),
+            'users_count' => $this->whenLoaded('users', function() {
+                return $this->users->count();
+            }),
+            'created_at' => $this->formatDateTime($this->created_at),
+            'updated_at' => $this->formatDateTime($this->updated_at)
         ];
     }
 }
-
-
-
-
-

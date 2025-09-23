@@ -2,49 +2,48 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
+use App\Models\Message;
+use Illuminate\Validation\Rule;
 
-class SendMessageRequest extends FormRequest
+class SendMessageRequest extends BaseFormRequest
 {
     public function authorize(): bool
     {
-        return true;
+        return auth()->user()->can('create', Message::class);
     }
 
     public function rules(): array
     {
         return [
-            'message' => 'nullable|string',
-            'type' => 'in:text,image,video,file',
-            'file' => [
-                'nullable',
-                'file',
-                'max:10240', // 10MB max
-                'mimes:jpg,jpeg,png,gif,pdf,doc,docx,ppt,pptx,xls,xlsx,txt,csv,json,xml,zip,rar,7z,mp4,mov,avi,mkv',
-                'mimetypes:image/jpeg,image/png,image/gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain,text/csv,application/json,application/xml,text/xml,application/zip,application/x-rar-compressed,application/x-7z-compressed,video/mp4,video/quicktime,video/x-msvideo,video/x-matroska'
-            ]
+            'chat_id' => 'required|exists:chats,id',
+            'content' => 'required|string|max:5000',
+            'type' => ['required', Rule::in(['text', 'image', 'video', 'audio', 'document', 'sticker'])],
+            'is_from_client' => 'boolean',
+            'metadata' => 'nullable|array',
+            'messenger_id' => 'nullable|string|max:255'
         ];
-    }
-
-    public function withValidator($validator)
-    {
-        $validator->after(function ($validator) {
-            $message = $this->input('message');
-            $hasFile = $this->hasFile('file');
-
-            if (empty($message) && !$hasFile) {
-                $validator->errors()->add('message', 'Необходимо указать сообщение или прикрепить файл');
-            }
-        });
     }
 
     public function messages(): array
     {
         return [
-            'message.required' => 'Сообщение обязательно',
+            'chat_id.required' => 'ID чата обязателен',
+            'chat_id.exists' => 'Указанный чат не существует',
+            'content.required' => 'Содержимое сообщения обязательно',
+            'content.max' => 'Сообщение не должно превышать 5000 символов',
+            'type.required' => 'Тип сообщения обязателен',
             'type.in' => 'Недопустимый тип сообщения',
-            'file.file' => 'Файл должен быть загружен',
-            'file.max' => 'Размер файла не должен превышать 10MB'
+            'metadata.array' => 'Метаданные должны быть массивом'
+        ];
+    }
+
+    public function attributes(): array
+    {
+        return [
+            'chat_id' => 'ID чата',
+            'content' => 'содержимое',
+            'type' => 'тип',
+            'metadata' => 'метаданные'
         ];
     }
 }
