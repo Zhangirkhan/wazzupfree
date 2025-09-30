@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Redis;
 
 class MessageService implements MessageServiceInterface
 {
-    public function sendMessage(string $chatId, string $message, User $user, string $type = 'text', ?UploadedFile $file = null): Message
+    public function sendMessage(string $chatId, string $message, User $user, string $type = 'text', ?UploadedFile $file = null, ?int $replyToMessageId = null): Message
     {
         Log::info('🔹 БЭК: MessageService::sendMessage вызван', [
             'chat_id' => $chatId,
@@ -42,6 +42,12 @@ class MessageService implements MessageServiceInterface
             'type' => $type,
             'direction' => 'out'
         ];
+
+        // Добавляем reply_to_message_id в metadata если есть
+        if ($replyToMessageId) {
+            $messageData['metadata'] = $messageData['metadata'] ?? [];
+            $messageData['metadata']['reply_to_message_id'] = $replyToMessageId;
+        }
 
         Log::info('🔹 БЭК: Данные сообщения подготовлены', $messageData);
 
@@ -195,6 +201,18 @@ class MessageService implements MessageServiceInterface
 
             // Публикуем в Redis канал чата
             Redis::publish('chat.' . $chatId, json_encode($data));
+
+            // Также помещаем в SSE очередь чата, которую читает ChatStreamController
+            // Это гарантирует доставку в текущую реализацию SSE, основанную на Redis списках
+            try {
+                Redis::lpush('sse_queue:chat.' . $chatId, json_encode($data));
+                Redis::expire('sse_queue:chat.' . $chatId, 3600); // TTL 1 час
+            } catch (\Exception $e) {
+                Log::warning('Failed to LPUSH message to SSE queue', [
+                    'chat_id' => $chatId,
+                    'error' => $e->getMessage()
+                ]);
+            }
 
             Log::info('Message published to Redis', [
                 'chat_id' => $chatId,
@@ -359,9 +377,12 @@ class MessageService implements MessageServiceInterface
                     $message->id
                 );
 
-                // Если изображение отправилось успешно и есть подпись, отправляем её отдельным сообщением
-                if ($result['success'] && !empty($message->content)) {
-                    $caption = "*{$user->name}*\n\n{$message->content}";
+                // Если изображение отправилось успешно, всегда отправляем подпись с именем отправителя
+                if ($result['success']) {
+                    // Формируем подпись: всегда имя, и если есть текст - то добавляем его
+                    $caption = !empty($message->content) 
+                        ? "*{$user->name}*\n{$message->content}"
+                        : "*{$user->name}*";
                     
                     Log::info('🔹 БЭК: Отправляем подпись к изображению', [
                         'caption' => $caption
@@ -404,9 +425,12 @@ class MessageService implements MessageServiceInterface
                     $message->id
                 );
 
-                // Если видео отправилось успешно и есть подпись, отправляем её отдельным сообщением
-                if ($result['success'] && !empty($message->content)) {
-                    $caption = "*{$user->name}*\n\n{$message->content}";
+                // Если видео отправилось успешно, всегда отправляем подпись с именем отправителя
+                if ($result['success']) {
+                    // Формируем подпись: всегда имя, и если есть текст - то добавляем его
+                    $caption = !empty($message->content) 
+                        ? "*{$user->name}*\n{$message->content}"
+                        : "*{$user->name}*";
                     
                     Log::info('🔹 БЭК: Отправляем подпись к видео', [
                         'caption' => $caption
@@ -427,9 +451,107 @@ class MessageService implements MessageServiceInterface
                         ]);
                     }
                 }
+            } elseif (($message->type === 'file' || $message->type === 'document') && isset($message->metadata['file_path'])) {
+                // Отправляем документ
+                $documentUrl = $message->metadata['file_path'];
+                $fileName = $message->metadata['file_name'] ?? 'document';
+
+                Log::info('🔹 БЭК: Отправляем документ через Wazzup24 API', [
+                    'channel_id' => $channelId,
+                    'chat_type' => $chatType,
+                    'chat_id' => $chatId,
+                    'document_url' => $documentUrl,
+                    'file_name' => $fileName,
+                    'mime_type' => $message->metadata['mime_type'] ?? 'application/octet-stream',
+                    'user_name' => $user->name
+                ]);
+
+                $result = $wazzupService->sendDocument(
+                    $channelId,
+                    $chatType,
+                    $chatId,
+                    $documentUrl,
+                    $fileName,
+                    null, // Не отправляем caption с документом
+                    $user->id,
+                    $message->id
+                );
+
+                // Если документ отправился успешно, отправляем подпись с именем отправителя
+                if ($result['success']) {
+                    $caption = !empty($message->content) 
+                        ? "*{$user->name}*\n{$message->content}"
+                        : "*{$user->name}*";
+                    
+                    Log::info('🔹 БЭК: Отправляем подпись к документу', [
+                        'caption' => $caption
+                    ]);
+                    
+                    $captionResult = $wazzupService->sendMessage(
+                        $channelId,
+                        $chatType,
+                        $chatId,
+                        $caption,
+                        $user->id,
+                        $message->id
+                    );
+                    
+                    if (!$captionResult['success']) {
+                        Log::warning('Не удалось отправить подпись к документу', [
+                            'error' => $captionResult['error']
+                        ]);
+                    }
+                }
+            } elseif ($message->type === 'audio' && isset($message->metadata['file_path'])) {
+                // Отправляем аудио
+                $audioUrl = $message->metadata['file_path'];
+
+                Log::info('🔹 БЭК: Отправляем аудио через Wazzup24 API', [
+                    'channel_id' => $channelId,
+                    'chat_type' => $chatType,
+                    'chat_id' => $chatId,
+                    'audio_url' => $audioUrl,
+                    'user_name' => $user->name
+                ]);
+
+                $result = $wazzupService->sendAudio(
+                    $channelId,
+                    $chatType,
+                    $chatId,
+                    $audioUrl,
+                    null, // Не отправляем caption с аудио
+                    $user->id,
+                    $message->id
+                );
+
+                // Если аудио отправилось успешно, отправляем подпись с именем отправителя
+                if ($result['success']) {
+                    $caption = !empty($message->content) 
+                        ? "*{$user->name}*\n{$message->content}"
+                        : "*{$user->name}*";
+                    
+                    Log::info('🔹 БЭК: Отправляем подпись к аудио', [
+                        'caption' => $caption
+                    ]);
+                    
+                    $captionResult = $wazzupService->sendMessage(
+                        $channelId,
+                        $chatType,
+                        $chatId,
+                        $caption,
+                        $user->id,
+                        $message->id
+                    );
+                    
+                    if (!$captionResult['success']) {
+                        Log::warning('Не удалось отправить подпись к аудио', [
+                            'error' => $captionResult['error']
+                        ]);
+                    }
+                }
             } else {
                 // Отправляем текстовое сообщение
-                $formattedMessage = "*{$user->name}*\n\n{$message->content}";
+                $formattedMessage = "*{$user->name}*\n{$message->content}";
 
                 Log::info('🔹 БЭК: Отправляем сообщение через Wazzup24 API', [
                     'channel_id' => $channelId,
@@ -472,11 +594,20 @@ class MessageService implements MessageServiceInterface
                     'error' => $result['error'] ?? 'Unknown error'
                 ]);
 
+                // Определяем тип ошибки для пользовательского сообщения
+                $errorRaw = $result['error'] ?? 'Unknown error';
+                $errorMessage = $errorRaw;
+                if (strpos($errorRaw, 'PAYLOAD_TOO_LARGE') !== false || strpos($errorRaw, '413') !== false) {
+                    $fileSize = isset($message->metadata['file_size']) ? round($message->metadata['file_size'] / 1024 / 1024, 1) : 0;
+                    $errorMessage = "Файл слишком большой для отправки через WhatsApp ({$fileSize} МБ). Максимум для видео: 10 МБ, для изображений/документов: 16 МБ";
+                }
+
                 // Обновляем сообщение с информацией об ошибке
                 $message->update([
                     'metadata' => array_merge($message->metadata ?? [], [
                         'wazzup_sent' => false,
-                        'wazzup_error' => $result['error'] ?? 'Unknown error',
+                        'wazzup_error' => $errorRaw,
+                        'wazzup_error_message' => $errorMessage,
                         'sent_via' => 'failed'
                     ])
                 ]);

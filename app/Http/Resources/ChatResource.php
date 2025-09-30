@@ -20,6 +20,10 @@ class ChatResource extends BaseResource
             'messenger_status' => $this->messenger_status,
             'unread_count' => $this->unread_count,
             'last_activity_at' => $this->formatDateTime($this->last_activity_at),
+            // Добавляем поля для совместимости с фронтендом
+            'client_name' => $this->client ? $this->client->name : $this->title,
+            'client_phone' => $this->client ? $this->client->phone : $this->phone,
+            'client_email' => $this->client ? $this->client->email : null,
             'client' => $this->whenLoaded('client', function() {
                 return new ClientResource($this->client);
             }),
@@ -29,10 +33,8 @@ class ChatResource extends BaseResource
             'assigned_to' => $this->whenLoaded('assignedTo', function() {
                 return new UserResource($this->assignedTo);
             }),
-            'last_message' => $this->whenLoaded('messages', function() {
-                return $this->messages->isNotEmpty() 
-                    ? new MessageResource($this->messages->last())
-                    : null;
+            'last_message' => $this->whenLoaded('lastMessage', function() {
+                return new MessageResource($this->lastMessage);
             }),
             'created_at' => $this->formatDateTime($this->created_at),
             'updated_at' => $this->formatDateTime($this->updated_at)

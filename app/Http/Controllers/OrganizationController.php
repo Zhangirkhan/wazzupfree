@@ -37,7 +37,6 @@ class OrganizationController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
-            'domain' => 'nullable|string|max:255',
         ]);
 
         $organization = Organization::create([

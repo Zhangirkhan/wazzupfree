@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Chat extends Model
@@ -29,6 +30,7 @@ class Chat extends Model
         'is_messenger_chat',
         'messenger_phone',
         'messenger_data',
+        'unread_count',
     ];
 
     protected $casts = [
@@ -62,6 +64,11 @@ class Chat extends Model
     public function messages(): HasMany
     {
         return $this->hasMany(Message::class);
+    }
+
+    public function lastMessage(): HasOne
+    {
+        return $this->hasOne(Message::class)->latest('created_at');
     }
 
     public function users()

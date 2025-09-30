@@ -205,9 +205,8 @@ class Wazzup24Service
                 'audioUrl' => $audioUrl
             ];
 
-            if ($caption) {
-                $data['caption'] = $this->cleanText($caption);
-            }
+            // Для аудио не отправляем caption, так как это может вызывать ошибку INVALID_MESSAGE_DATA
+            // Подпись будет отправлена отдельным текстовым сообщением
 
             $response = $this->makeRequest('POST', '/v3/message', $data);
 
@@ -236,16 +235,17 @@ class Wazzup24Service
                 'channelId' => $channelId,
                 'chatType' => $chatType,
                 'chatId' => $chatId,
-                'documentUrl' => $documentUrl
+                'contentUri' => $documentUrl  // Используем contentUri вместо documentUrl
             ];
 
             if ($fileName) {
                 $data['fileName'] = $fileName;
             }
 
-            if ($caption) {
-                $data['caption'] = $this->cleanText($caption);
-            }
+            // Для документов не отправляем caption и text, так как это вызывает ошибку INVALID_MESSAGE_DATA
+            // Подпись будет отправлена отдельным текстовым сообщением
+
+            Log::info('Sending document to Wazzup24', $data);
 
             $response = $this->makeRequest('POST', '/v3/message', $data);
 

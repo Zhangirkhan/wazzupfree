@@ -115,8 +115,9 @@ class ChatApiController extends ApiController
             // Валидация данных
         $validated = $request->validate([
             'message' => 'required|string',
-            'type' => 'nullable|string|in:text,file,image,video',
-            'file' => 'nullable|file|max:' . config('uploads.max_file_size_kb', 51200) // 50MB лимит из конфигурации
+            'type' => 'nullable|string|in:text,file,image,video,audio,document',
+            'file' => 'nullable|file|max:' . config('uploads.max_file_size_kb', 51200), // 50MB лимит из конфигурации
+            'reply_to_message_id' => 'nullable|integer|exists:messages,id' // ID сообщения для ответа
         ]);
 
             Log::info('🔹 БЭК: Данные прошли валидацию', [
@@ -139,7 +140,8 @@ class ChatApiController extends ApiController
                 $validated['message'],
                 $user,
                 $validated['type'] ?? 'text',
-                $file
+                $file,
+                $validated['reply_to_message_id'] ?? null
             );
 
             Log::info('🔹 БЭК: Сообщение создано успешно', [
@@ -251,6 +253,34 @@ class ChatApiController extends ApiController
             return $this->successResponse(new ChatResource($chat), 'Chat transferred successfully');
         } catch (\Exception $e) {
             return $this->errorResponse('Failed to transfer chat', $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Удалить чат
+     */
+    public function destroy(string $chatId): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $result = $this->chatService->deleteChat($chatId, $user);
+
+            if ($result) {
+                $this->loggingService->logChatActivity('chat_deleted', $chatId, [
+                    'user_id' => $user->id
+                ]);
+
+                return $this->successResponse(null, 'Chat deleted successfully');
+            } else {
+                return $this->errorResponse('Failed to delete chat', 'Unknown error occurred', 500);
+            }
+        } catch (\Exception $e) {
+            $this->loggingService->logError('Failed to delete chat', [
+                'error' => $e->getMessage(),
+                'user_id' => Auth::id(),
+                'chat_id' => $chatId
+            ]);
+            return $this->errorResponse('Failed to delete chat', $e->getMessage(), 500);
         }
     }
 }

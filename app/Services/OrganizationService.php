@@ -35,11 +35,11 @@ class OrganizationService
                 'name' => $data['name'],
                 'slug' => $data['slug'] ?? \Str::slug($data['name']),
                 'description' => $data['description'] ?? null,
-                'domain' => $data['domain'] ?? null,
                 'phone' => $data['phone'] ?? null,
                 'wazzup24_enabled' => $data['wazzup24_enabled'] ?? false,
                 'wazzup24_api_key' => $data['wazzup24_api_key'] ?? null,
                 'wazzup24_channel_id' => $data['wazzup24_channel_id'] ?? null,
+                'wazzup24_webhook_url' => $data['webhook_url'] ?? $data['wazzup24_webhook_url'] ?? null,
                 'is_active' => $data['is_active'] ?? true,
             ]);
 
@@ -57,15 +57,24 @@ class OrganizationService
         $organization = Organization::findOrFail($id);
 
         return DB::transaction(function () use ($organization, $data) {
+
+            // Безопасно вычисляем webhook URL (учитываем оба названия поля и пустые строки)
+            $webhookUrl = $organization->wazzup24_webhook_url;
+            if (array_key_exists('webhook_url', $data)) {
+                $webhookUrl = ($data['webhook_url'] === '' || $data['webhook_url'] === null) ? null : $data['webhook_url'];
+            } elseif (array_key_exists('wazzup24_webhook_url', $data)) {
+                $webhookUrl = ($data['wazzup24_webhook_url'] === '' || $data['wazzup24_webhook_url'] === null) ? null : $data['wazzup24_webhook_url'];
+            }
+
             $organization->update([
                 'name' => $data['name'] ?? $organization->name,
-                'slug' => $data['slug'] ?? $organization->slug,
+                'slug' => array_key_exists('slug', $data) ? $data['slug'] : $organization->slug,
                 'description' => $data['description'] ?? $organization->description,
-                'domain' => $data['domain'] ?? $organization->domain,
                 'phone' => $data['phone'] ?? $organization->phone,
                 'wazzup24_enabled' => $data['wazzup24_enabled'] ?? $organization->wazzup24_enabled,
                 'wazzup24_api_key' => $data['wazzup24_api_key'] ?? $organization->wazzup24_api_key,
                 'wazzup24_channel_id' => $data['wazzup24_channel_id'] ?? $organization->wazzup24_channel_id,
+                'wazzup24_webhook_url' => $webhookUrl,
                 'is_active' => $data['is_active'] ?? $organization->is_active,
             ]);
 

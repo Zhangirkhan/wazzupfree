@@ -38,6 +38,24 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
                 'from' => $message['from'] ?? 'unknown'
             ]);
 
+            // Фильтруем эхо и не-входящие сообщения от Wazzup24, чтобы не зациклиться
+            // isEcho=true означает, что это наше же исходящее сообщение, отданное обратно вебхуком
+            if (isset($message['isEcho']) && $message['isEcho'] === true) {
+                Log::info('Skipping echo message from Wazzup24', [
+                    'message_id' => $message['id'] ?? null
+                ]);
+                return true;
+            }
+
+            // Вебхук может присылать разные статусы; обрабатываем только входящие сообщения клиента
+            if (isset($message['status']) && $message['status'] !== 'inbound') {
+                Log::info('Skipping non-inbound message', [
+                    'message_id' => $message['id'] ?? null,
+                    'status' => $message['status']
+                ]);
+                return true;
+            }
+
             $messageType = $message['type'] ?? 'text';
             
             return match ($messageType) {
@@ -72,6 +90,11 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
             $text = $message['text']['body'] ?? '';
             $contactData = $this->extractContactData($message);
             $wazzupMessageId = $message['id'] ?? null;
+            $organization = null;
+            if (isset($message['organization_id'])) {
+                // Пробрасываем организацию далее, если она передана из вебхука org
+                $organization = \App\Models\Organization::find($message['organization_id']);
+            }
 
             if (empty($phone) || empty($text)) {
                 Log::warning('Invalid text message data:', $message);
@@ -82,7 +105,7 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
                 $phone,
                 $text,
                 $contactData,
-                null,
+                $organization,
                 $wazzupMessageId
             );
 
@@ -110,14 +133,34 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
     {
         try {
             $phone = $this->cleanPhoneNumber($message['from'] ?? '');
-            $imageData = $message['image'] ?? [];
-            $imageUrl = $imageData['link'] ?? '';
-            $caption = $imageData['caption'] ?? '';
+            
+            // Wazzup24 присылает URL изображения в contentUri, а не в image.link
+            $imageUrl = $message['contentUri'] ?? '';
+            
+            // Fallback для старого формата, если есть
+            if (empty($imageUrl) && isset($message['image'])) {
+                $imageData = $message['image'];
+                $imageUrl = $imageData['link'] ?? '';
+                $caption = $imageData['caption'] ?? '';
+            } else {
+                $caption = $message['text'] ?? '';
+            }
+            
             $contactData = $this->extractContactData($message);
             $wazzupMessageId = $message['id'] ?? null;
+            
+            // Извлекаем организацию, если передана
+            $organization = null;
+            if (isset($message['organization_id'])) {
+                $organization = \App\Models\Organization::find($message['organization_id']);
+            }
 
             if (empty($phone) || empty($imageUrl)) {
-                Log::warning('Invalid image message data:', $message);
+                Log::warning('Invalid image message data:', [
+                    'phone' => $phone,
+                    'imageUrl' => $imageUrl,
+                    'message_keys' => array_keys($message)
+                ]);
                 return false;
             }
 
@@ -126,7 +169,7 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
                 $imageUrl,
                 $caption,
                 $contactData,
-                null,
+                $organization,
                 $wazzupMessageId
             );
 
@@ -155,13 +198,27 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
     {
         try {
             $phone = $this->cleanPhoneNumber($message['from'] ?? '');
-            $videoData = $message['video'] ?? [];
-            $videoUrl = $videoData['link'] ?? '';
-            $caption = $videoData['caption'] ?? '';
+            
+            // Wazzup24 присылает URL видео в contentUri, а не в video.link
+            $videoUrl = $message['contentUri'] ?? '';
+            
+            // Fallback для старого формата, если есть
+            if (empty($videoUrl) && isset($message['video'])) {
+                $videoData = $message['video'];
+                $videoUrl = $videoData['link'] ?? '';
+                $caption = $videoData['caption'] ?? '';
+            } else {
+                $caption = $message['text'] ?? '';
+            }
+            
             $contactData = $this->extractContactData($message);
 
             if (empty($phone) || empty($videoUrl)) {
-                Log::warning('Invalid video message data:', $message);
+                Log::warning('Invalid video message data:', [
+                    'phone' => $phone,
+                    'videoUrl' => $videoUrl,
+                    'message_keys' => array_keys($message)
+                ]);
                 return false;
             }
 
@@ -197,12 +254,24 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
     {
         try {
             $phone = $this->cleanPhoneNumber($message['from'] ?? '');
-            $stickerData = $message['sticker'] ?? [];
-            $stickerUrl = $stickerData['link'] ?? '';
+            
+            // Wazzup24 присылает URL стикера в contentUri
+            $stickerUrl = $message['contentUri'] ?? '';
+            
+            // Fallback для старого формата
+            if (empty($stickerUrl) && isset($message['sticker'])) {
+                $stickerData = $message['sticker'];
+                $stickerUrl = $stickerData['link'] ?? '';
+            }
+            
             $contactData = $this->extractContactData($message);
 
             if (empty($phone) || empty($stickerUrl)) {
-                Log::warning('Invalid sticker message data:', $message);
+                Log::warning('Invalid sticker message data:', [
+                    'phone' => $phone,
+                    'stickerUrl' => $stickerUrl,
+                    'message_keys' => array_keys($message)
+                ]);
                 return false;
             }
 
@@ -238,11 +307,20 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
     {
         try {
             $phone = $this->cleanPhoneNumber($message['from'] ?? '');
-            $documentData = $message['document'] ?? [];
-            $documentUrl = $documentData['link'] ?? '';
-            $documentName = $documentData['filename'] ?? 'Документ';
-            $caption = $documentData['caption'] ?? '';
+            
+            // Wazzup присылает данные напрямую в message, а не в document
+            $documentUrl = $message['contentUri'] ?? '';
+            $documentName = $message['text'] ?? 'Документ';
+            $caption = $message['text'] ?? '';
             $contactData = $this->extractContactData($message);
+
+            // Извлекаем filename из URL если есть
+            if (strpos($documentUrl, 'filename=') !== false) {
+                parse_str(parse_url($documentUrl, PHP_URL_QUERY), $params);
+                if (!empty($params['filename'])) {
+                    $documentName = $params['filename'];
+                }
+            }
 
             if (empty($phone) || empty($documentUrl)) {
                 Log::warning('Invalid document message data:', $message);
@@ -283,8 +361,9 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
     {
         try {
             $phone = $this->cleanPhoneNumber($message['from'] ?? '');
-            $audioData = $message['audio'] ?? [];
-            $audioUrl = $audioData['link'] ?? '';
+            
+            // Wazzup присылает данные напрямую в message, а не в audio
+            $audioUrl = $message['contentUri'] ?? '';
             $contactData = $this->extractContactData($message);
 
             if (empty($phone) || empty($audioUrl)) {
@@ -399,6 +478,16 @@ class WebhookMessageProcessor implements WebhookMessageProcessorInterface
                     'avatarUri' => $contact['avatar'] ?? null
                 ];
             }
+        }
+        // Fallback для формата Wazzup v3: поле contact { name, avatarUri, phone }
+        if (!$contactData && isset($message['contact']) && is_array($message['contact'])) {
+            $c = $message['contact'];
+            $contactData = [
+                'name' => $c['name'] ?? null,
+                'avatar' => $c['avatarUri'] ?? null,
+                'avatarUri' => $c['avatarUri'] ?? null,
+                'phone' => $c['phone'] ?? null
+            ];
         }
         
         return $contactData;

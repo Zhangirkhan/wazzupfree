@@ -9,6 +9,7 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 interface ChatRepositoryInterface
 {
     public function getAll(int $perPage = 20): LengthAwarePaginator;
+    public function getAllIncludingClosed(int $perPage = 20): LengthAwarePaginator;
     public function findById(int $id): ?Chat;
     public function create(array $data, User $user): Chat;
     public function update(Chat $chat, array $data): Chat;

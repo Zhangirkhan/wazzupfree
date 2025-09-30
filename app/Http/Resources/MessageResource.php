@@ -8,9 +8,31 @@ class MessageResource extends BaseResource
 {
     public function toArray(Request $request): array
     {
+        $metadata = $this->metadata ?? [];
+        
+        // Загружаем цитируемое сообщение если есть
+        if (isset($metadata['reply_to_message_id'])) {
+            $replyToMessage = \App\Models\Message::find($metadata['reply_to_message_id']);
+            if ($replyToMessage) {
+                $metadata['reply_to_message'] = [
+                    'id' => $replyToMessage->id,
+                    'content' => $replyToMessage->content,
+                    'message' => $replyToMessage->content,
+                    'type' => $replyToMessage->type,
+                    'is_from_client' => $replyToMessage->is_from_client,
+                    'file_name' => $replyToMessage->metadata['file_name'] ?? null,
+                    'user' => $replyToMessage->user ? [
+                        'id' => $replyToMessage->user->id,
+                        'name' => $replyToMessage->user->name
+                    ] : null
+                ];
+            }
+        }
+        
         return [
             'id' => $this->id,
             'content' => $this->content,
+            'message' => $this->content, // Добавляем для совместимости с фронтендом
             'type' => $this->type,
             'is_from_client' => $this->is_from_client,
             'is_read' => $this->is_read,
@@ -21,7 +43,7 @@ class MessageResource extends BaseResource
             'user' => $this->whenLoaded('user', function() {
                 return new UserResource($this->user);
             }),
-            'metadata' => $this->metadata,
+            'metadata' => $metadata,
             'messenger_id' => $this->messenger_id,
             'created_at' => $this->formatDateTime($this->created_at),
             'updated_at' => $this->formatDateTime($this->updated_at)

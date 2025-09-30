@@ -7,6 +7,7 @@ use App\Models\Chat;
 use App\Models\Message;
 use App\Models\ChatParticipant;
 use App\Models\Client;
+use Illuminate\Support\Facades\Redis;
 
 class ClearChats extends Command
 {
@@ -51,6 +52,38 @@ class ClearChats extends Command
         Client::truncate();
         $this->info("Удалено клиентов: {$clientsCount}");
 
+        // Отправляем событие через SSE для обновления фронтенда
+        $this->broadcastChatsClearedEvent();
+
         $this->info('Очистка завершена успешно!');
+    }
+
+    /**
+     * Отправляет событие об очистке чатов через SSE
+     */
+    private function broadcastChatsClearedEvent(): void
+    {
+        try {
+            $eventData = [
+                'type' => 'chats_cleared',
+                'timestamp' => now()->toISOString()
+            ];
+
+            // Отправляем в глобальный канал чатов
+            Redis::publish('chats.global', json_encode($eventData));
+            Redis::lpush('sse_queue:chats.global', json_encode($eventData));
+            Redis::expire('sse_queue:chats.global', 3600);
+
+            // Отправляем событие всем активным пользователям
+            $activeUsers = \App\Models\User::whereNotNull('id')->pluck('id');
+            foreach ($activeUsers as $userId) {
+                Redis::lpush('sse_queue:user.' . $userId . '.chats', json_encode($eventData));
+                Redis::expire('sse_queue:user.' . $userId . '.chats', 3600);
+            }
+
+            $this->info('SSE событие об очистке чатов отправлено');
+        } catch (\Exception $e) {
+            $this->warn('Не удалось отправить SSE событие: ' . $e->getMessage());
+        }
     }
 }

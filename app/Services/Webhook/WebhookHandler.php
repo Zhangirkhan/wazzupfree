@@ -44,14 +44,14 @@ class WebhookHandler implements WebhookHandlerInterface
             'files_count' => count($request->allFiles())
         ]);
 
-        // Обрабатываем GET запросы (для тестирования и проверки доступности)
-        if ($request->method() === 'GET') {
+        // Обрабатываем GET/HEAD/OPTIONS запросы (для тестирования и проверки доступности)
+        if (in_array($request->method(), ['GET', 'HEAD', 'OPTIONS'], true)) {
             Log::info('=== GET REQUEST HANDLED ===');
             $response = response()->json([
                 'status' => 'success',
                 'message' => 'Webhook endpoint is accessible',
                 'timestamp' => now()->toDateTimeString(),
-                'method' => 'GET'
+                'method' => $request->method()
             ], 200);
 
             Log::info('=== GET RESPONSE ===', [
@@ -72,7 +72,18 @@ class WebhookHandler implements WebhookHandlerInterface
             // Валидируем webhook
             $this->validate($request);
 
+            // Провайдеры (например, Wazzup24) могут присылать тестовый пустой POST и ожидают 200
+            if ($request->method() === 'POST' && empty($request->all()) && trim((string) $request->getContent()) === '') {
+                Log::info('=== EMPTY POST WEBHOOK (validation ping) ===');
+                return response()->json(['status' => 'ok'], 200);
+            }
+
             $data = $request->all();
+            // Распаковываем вложение, если провайдер отправляет полезную нагрузку внутри ключа data
+            if (isset($data['data']) && is_array($data['data'])) {
+                Log::info('Unwrapped webhook payload from data key');
+                $data = $data['data'];
+            }
             Log::info('Webhook data parsed:', ['data' => $data]);
 
             // Проверяем тестовый запрос от Wazzup24
@@ -150,15 +161,29 @@ class WebhookHandler implements WebhookHandlerInterface
                 'url' => $request->fullUrl()
             ]);
 
-            // Находим организацию
-            $org = Organization::where('slug', $organization)->first();
+            // Возвращаем 200 OK на пустой POST (валидационный запрос от провайдера)
+            // Делаем это ДО поиска организации, т.к. провайдер проверяет только доступность URL
+            if ($request->method() === 'POST' && empty($request->all()) && trim((string) $request->getContent()) === '') {
+                Log::info('=== ORGANIZATION EMPTY POST WEBHOOK (validation ping) ===', [
+                    'organization' => $organization
+                ]);
+                return response()->json(['status' => 'ok', 'organization' => $organization], 200);
+            }
+
+            // Нормализуем и находим организацию по slug или id
+            $organizationParam = (string) $organization;
+
+            $org = Organization::where('slug', $organizationParam)->first();
+            if (!$org && ctype_digit($organizationParam)) {
+                $org = Organization::find((int) $organizationParam);
+            }
             if (!$org) {
                 Log::warning('Organization not found:', ['organization' => $organization]);
                 return response()->json(['error' => 'Organization not found'], 404);
             }
 
             // Обрабатываем GET запросы
-            if ($request->method() === 'GET') {
+            if (in_array($request->method(), ['GET', 'HEAD', 'OPTIONS'], true)) {
                 return response()->json([
                     'status' => 'success',
                     'message' => 'Organization webhook endpoint is accessible',
@@ -168,6 +193,13 @@ class WebhookHandler implements WebhookHandlerInterface
             }
 
             $data = $request->all();
+            // Распаковываем вложение, если провайдер отправляет полезную нагрузку внутри ключа data
+            if (isset($data['data']) && is_array($data['data'])) {
+                Log::info('Unwrapped organization webhook payload from data key', [
+                    'organization' => $organization
+                ]);
+                $data = $data['data'];
+            }
             Log::info('Organization webhook data:', ['data' => $data]);
 
             // Обрабатываем сообщения для организации
@@ -219,7 +251,26 @@ class WebhookHandler implements WebhookHandlerInterface
     private function handleMessages(array $messages): JsonResponse
     {
         try {
-            $results = $this->messageProcessor->handleMessages($messages);
+            // Нормализуем формат сообщений от Wazzup24 под ожидаемую схему процессора
+            $normalized = array_map(function ($message) {
+                if (!is_array($message)) {
+                    return $message;
+                }
+                // Приводим текст к виду ['body' => '...'] если пришла строка
+                if (isset($message['type']) && $message['type'] === 'text' && isset($message['text']) && is_string($message['text'])) {
+                    $message['text'] = ['body' => $message['text']];
+                }
+                // Проставляем универсальные поля, если их ждёт процессор
+                if (!isset($message['id']) && isset($message['messageId'])) {
+                    $message['id'] = $message['messageId'];
+                }
+                if (!isset($message['from'])) {
+                    $message['from'] = $message['chatId'] ?? ($message['contact']['phone'] ?? '');
+                }
+                return $message;
+            }, $messages);
+
+            $results = $this->messageProcessor->handleMessages($normalized);
             $successCount = count(array_filter($results));
             
             Log::info('Messages processed:', [
@@ -406,8 +457,15 @@ class WebhookHandler implements WebhookHandlerInterface
      */
     private function handleMessagesForOrganization(array $messages, Organization $organization): JsonResponse
     {
-        // Здесь можно добавить специфичную логику для организации
-        return $this->handleMessages($messages);
+        // Добавляем контекст организации к каждому сообщению
+        $messagesWithOrg = array_map(function ($message) use ($organization) {
+            if (is_array($message)) {
+                $message['organization_id'] = $organization->id;
+            }
+            return $message;
+        }, $messages);
+
+        return $this->handleMessages($messagesWithOrg);
     }
 
     /**

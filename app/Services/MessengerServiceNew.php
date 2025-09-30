@@ -776,13 +776,55 @@ class MessengerServiceNew
     {
         $chat = Chat::find($chatId);
         if (!$chat) {
-            return false;
+            return ['success' => false, 'error' => 'Chat not found'];
         }
 
+        // Обновляем статус чата
         $chat->update([
             'messenger_status' => 'closed',
+            'status' => 'closed', // Для основного статуса чата
             'last_activity_at' => now()
         ]);
+
+        // Отправляем сообщение клиенту о закрытии чата напрямую через Wazzup
+        $clientMessage = "Ваш чат был закрыт.\nДля восстановления общение с менеджером нажмите 1\nдля возврата в главное меню нажмите 0";
+        
+        if (class_exists('\App\Services\Wazzup24Service') && $chat->messenger_phone) {
+            try {
+                $wazzupService = app('\App\Services\Wazzup24Service');
+                
+                // Получаем данные для отправки
+                $channelId = config('services.wazzup24.channel_id');
+                $chatType = 'whatsapp';
+                $chatIdWazzup = $chat->messenger_phone;
+
+                $result = $wazzupService->sendMessage(
+                    $channelId,
+                    $chatType,
+                    $chatIdWazzup,
+                    $clientMessage,
+                    $managerId,
+                    null
+                );
+
+                if ($result['success']) {
+                    Log::info('Closure message sent to client via Wazzup24', [
+                        'chat_id' => $chatId,
+                        'wazzup_id' => $result['message_id'] ?? null
+                    ]);
+                } else {
+                    Log::error('Failed to send closure message via Wazzup24', [
+                        'chat_id' => $chatId,
+                        'error' => $result['error'] ?? 'Unknown error'
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('Exception sending closure message via Wazzup24', [
+                    'chat_id' => $chatId,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
 
         // Сохраняем системное сообщение о закрытии
         Message::create([
@@ -796,7 +838,13 @@ class MessengerServiceNew
             ]
         ]);
 
-        return true;
+        Log::info('Chat closed by manager', [
+            'chat_id' => $chatId,
+            'manager_id' => $managerId,
+            'reason' => $reason
+        ]);
+
+        return ['success' => true, 'message' => 'Chat closed successfully'];
     }
 
     /**

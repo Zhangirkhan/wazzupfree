@@ -74,10 +74,16 @@ class OrganizationController extends ApiController
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:organizations,slug',
+            'slug' => [
+                'required',
+                'string',
+                'max:255',
+                'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
+                'unique:organizations,slug'
+            ],
             'description' => 'nullable|string',
-            'domain' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:20',
+            'webhook_url' => 'nullable|url|max:200',
             'wazzup24_enabled' => 'boolean',
             'wazzup24_api_key' => 'nullable|string',
             'wazzup24_channel_id' => 'nullable|string',
@@ -102,10 +108,16 @@ class OrganizationController extends ApiController
     {
         $request->validate([
             'name' => 'sometimes|string|max:255',
-            'slug' => 'sometimes|string|max:255|unique:organizations,slug,' . $id,
+            'slug' => [
+                'required',
+                'string',
+                'max:255',
+                'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
+                'unique:organizations,slug,' . $id
+            ],
             'description' => 'nullable|string',
-            'domain' => 'nullable|string|max:255',
             'phone' => 'nullable|string|max:20',
+            'webhook_url' => 'nullable|url|max:200',
             'wazzup24_enabled' => 'boolean',
             'wazzup24_api_key' => 'nullable|string',
             'wazzup24_channel_id' => 'nullable|string',

@@ -8,12 +8,14 @@ use App\Models\Chat;
 use App\Models\Client;
 use App\Models\Department;
 use App\Services\ChatHistoryService;
+use App\Services\SystemMessageService;
 use Illuminate\Support\Facades\Log;
 
 class ChatStateManager implements ChatStateManagerInterface
 {
     public function __construct(
-        private MessageProcessorInterface $messageProcessor
+        private MessageProcessorInterface $messageProcessor,
+        private SystemMessageService $systemMessageService
     ) {}
 
     /**
@@ -68,9 +70,22 @@ class ChatStateManager implements ChatStateManagerInterface
         $departments = Department::forChatbot()
             ->where('organization_id', $chat->organization_id)
             ->get();
-        $menuText = $this->generateMenuText($departments);
+        $clientName = trim((string) ($client->name ?? ''));
+        // Если имя похоже на автосгенерированное "Клиент <телефон>", используем только реальное имя без телефона
+        if ($clientName === '' || preg_match('/^Клиент\s+\d+$/u', $clientName)) {
+            // Если у клиента есть реальное имя — используем его, без телефона
+            $contactName = $chat->client?->name;
+            if (!empty($contactName) && !preg_match('/^Клиент\s+\d+$/u', $contactName)) {
+                $clientName = $contactName;
+            } else {
+                $clientName = '';
+            }
+        }
+        $menuText = $this->generateMenuText($departments, $clientName);
 
         // Отправляем меню
+        // Небольшая задержка, чтобы избежать антиспама у провайдера отправки
+        usleep(300000); // 300ms
         $this->messageProcessor->sendMessage($chat, $menuText);
 
         // Обновляем статус на ожидание выбора
@@ -131,7 +146,8 @@ class ChatStateManager implements ChatStateManagerInterface
 
                 // Отправляем клиенту системное сообщение только один раз
                 if (!$alreadyNotified) {
-                    $this->messageProcessor->sendMessage($chat, "Ваш вопрос отправлен в отдел {$department->name}. Ожидайте ответа.");
+                    $message = $this->systemMessageService->getMessage('question_sent_to_department', ['department' => $department->name]);
+                    $this->messageProcessor->sendMessage($chat, $message);
                 }
                 return;
             }
@@ -156,7 +172,8 @@ class ChatStateManager implements ChatStateManagerInterface
         // Отправляем подсказку только после 5 неправильных ответов
         if ($wrongAnswers >= 5) {
             $choicesText = implode(', ', $validChoices);
-            $this->messageProcessor->sendMessage($chat, "Пожалуйста, выберите номер отдела ({$choicesText}).");
+            $message = $this->systemMessageService->getMessage('select_department_number', ['choices' => $choicesText]);
+            $this->messageProcessor->sendMessage($chat, $message);
 
             // Сбрасываем счетчик после отправки подсказки
             $chat->update([
@@ -187,15 +204,30 @@ class ChatStateManager implements ChatStateManagerInterface
             /** @var \App\Models\Department $dept */
             $dept = $departmentMapping[$message];
 
+            // Обновляем состояние и помечаем, что уведомление отделу отправлено
             $chat->update([
                 'messenger_status' => 'department_selected',
-                'department_id' => $dept->id
+                'department_id' => $dept->id,
+                'messenger_data' => array_merge($chat->messenger_data ?? [], [
+                    'department_notified' => true,
+                    'connected_message_sent' => ($chat->messenger_data['connected_message_sent'] ?? false)
+                ])
             ]);
 
             $historyService = app(ChatHistoryService::class);
             $historyService->logDepartmentSelection($chat, $dept);
 
-            $this->messageProcessor->sendMessage($chat, "Подключаем с {$dept->name}. Пожалуйста, можете задать вопрос.");
+            // Отправляем "Подключаем с ..." только один раз
+            $connectedSent = $chat->messenger_data['connected_message_sent'] ?? false;
+            if (!$connectedSent) {
+                $message = $this->systemMessageService->getMessage('connecting_with_department', ['department' => $dept->name]);
+                $this->messageProcessor->sendMessage($chat, $message);
+                $chat->update([
+                    'messenger_data' => array_merge($chat->messenger_data ?? [], [
+                        'connected_message_sent' => true
+                    ])
+                ]);
+            }
             return;
         }
 
@@ -206,7 +238,8 @@ class ChatStateManager implements ChatStateManagerInterface
         }
 
         // Если сообщение не распознано, отправляем подсказку
-        $this->messageProcessor->sendMessage($chat, "Пожалуйста, выберите номер отдела (1 или 2).");
+        $message = $this->systemMessageService->getMessage('select_department_number', ['choices' => '1, 2']);
+        $this->messageProcessor->sendMessage($chat, $message);
     }
 
     /**
@@ -221,7 +254,8 @@ class ChatStateManager implements ChatStateManagerInterface
         }
 
         if (empty(trim($message))) {
-            $this->messageProcessor->sendMessage($chat, "Пожалуйста, напишите ваш вопрос:");
+            $msg = $this->systemMessageService->getMessage('write_your_question');
+            $this->messageProcessor->sendMessage($chat, $msg);
             return;
         }
 
@@ -244,7 +278,8 @@ class ChatStateManager implements ChatStateManagerInterface
 
         // Отправляем сообщение о передаче в отдел только один раз
         if (!$hasBeenNotified) {
-            $this->messageProcessor->sendMessage($chat, "Ваш вопрос отправлен в отдел {$chat->department->name}. Ожидайте ответа.");
+            $msg = $this->systemMessageService->getMessage('question_sent_to_department', ['department' => $chat->department->name]);
+            $this->messageProcessor->sendMessage($chat, $msg);
         }
     }
 
@@ -280,17 +315,20 @@ class ChatStateManager implements ChatStateManagerInterface
             // Продолжить чат с тем же менеджером (обход меню и отделов)
             if ($chat->assigned_to) {
                 $chat->update(['messenger_status' => 'active']);
-                $this->messageProcessor->sendMessage($chat, "Чат продолжен с тем же менеджером. Можете задать новый вопрос.");
+                $msg = $this->systemMessageService->getMessage('chat_continued');
+                $this->messageProcessor->sendMessage($chat, $msg);
             } else {
                 // Если нет назначенного менеджера, возвращаемся в меню
-                $this->messageProcessor->sendMessage($chat, "К сожалению, предыдущий менеджер недоступен. Выберите отдел заново.");
+                $msg = $this->systemMessageService->getMessage('manager_unavailable');
+                $this->messageProcessor->sendMessage($chat, $msg);
                 $this->resetToMenu($chat, $client);
             }
         } elseif ($message === '0') {
             // Сбросить менеджера и отдел, показать меню заново
             $this->resetToMenu($chat, $client);
         } else {
-            $this->messageProcessor->sendMessage($chat, "1 - Продолжить чат с тем же менеджером\n0 - Вернуться в главное меню");
+            $msg = $this->systemMessageService->getMessage('continue_or_menu');
+            $this->messageProcessor->sendMessage($chat, $msg);
         }
     }
 
@@ -305,13 +343,15 @@ class ChatStateManager implements ChatStateManagerInterface
                 $chat->update(['messenger_status' => 'active']);
 
                 $managerName = $chat->assignedTo ? $chat->assignedTo->name : 'менеджером отдела';
-                $this->messageProcessor->sendMessage($chat, "Чат возобновлен с {$managerName}. Можете продолжить общение.");
+                $msg = $this->systemMessageService->getMessage('chat_resumed', ['manager' => $managerName]);
+                $this->messageProcessor->sendMessage($chat, $msg);
 
                 // Уведомляем менеджера о возобновлении чата
                 $this->notifyManagerChatResumed($chat);
             } else {
                 // Если нет назначенного менеджера, возвращаемся к выбору отдела
-                $this->messageProcessor->sendMessage($chat, "Предыдущий менеджер недоступен. Выберите отдел заново.");
+                $msg = $this->systemMessageService->getMessage('previous_manager_unavailable');
+                $this->messageProcessor->sendMessage($chat, $msg);
                 $this->resetToMenu($chat, $client);
             }
         } elseif ($message === '0') {
@@ -319,7 +359,8 @@ class ChatStateManager implements ChatStateManagerInterface
             $this->resetToMenu($chat, $client);
         } else {
             // Неправильный ответ - повторяем предложение
-            $this->messageProcessor->sendMessage($chat, "Простите, чат был закрыт менеджером.\n\nЕсли хотите продолжить общение с менеджером нажмите 1\nЕсли хотите вернуться в меню нажмите 0");
+            $msg = $this->systemMessageService->getMessage('chat_closed_by_manager');
+            $this->messageProcessor->sendMessage($chat, $msg);
         }
     }
 
@@ -348,21 +389,10 @@ class ChatStateManager implements ChatStateManagerInterface
     /**
      * Генерация текста меню
      */
-    private function generateMenuText($departments): string
+    private function generateMenuText($departments, ?string $clientName = null): string
     {
-        $text = "Добро пожаловать! С кем хотите связаться?\n\n";
-
-        // Нумерация в меню должна соответствовать позиции (1..N),
-        // так как обработчик выбора ожидает именно порядковые номера
-        foreach ($departments as $index => $department) {
-            $number = $index + 1;
-            $text .= "{$number}. {$department->name}\n";
-        }
-
-        // Подсказка по возврату в меню из других состояний
-        $text .= "\n0. Вернуться в главное меню";
-
-        return $text;
+        // Используем SystemMessageService для генерации меню с версионированием
+        return $this->systemMessageService->getWelcomeMenu($departments, $clientName);
     }
 
     /**

@@ -11,20 +11,16 @@ class Organization extends Model
         'name',
         'slug',
         'description',
-        'domain',
         'phone',
         'is_active',
         'wazzup24_api_key',
         'wazzup24_channel_id',
         'wazzup24_webhook_url',
-        'wazzup24_webhook_secret',
-        'wazzup24_settings',
         'wazzup24_enabled',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
-        'wazzup24_settings' => 'array',
         'wazzup24_enabled' => 'boolean',
     ];
 

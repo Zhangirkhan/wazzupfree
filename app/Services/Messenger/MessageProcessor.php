@@ -87,7 +87,11 @@ class MessageProcessor implements MessageProcessorInterface
                 'caption' => $caption,
                 'client_id' => $client->id,
                 'client_name' => $client->name,
-                'direction' => 'incoming'
+                'direction' => 'incoming',
+                // Поля совместимости фронтенда
+                'file_path' => $imageData['url'],
+                'file_name' => $imageData['filename'],
+                'file_size' => $imageData['size']
             ];
 
             // Добавляем wazzup_message_id если есть
@@ -101,7 +105,11 @@ class MessageProcessor implements MessageProcessorInterface
                 'content' => $messageContent,
                 'type' => 'image',
                 'is_from_client' => true, // Это сообщение от клиента
-                'metadata' => $metadata
+                'metadata' => $metadata,
+                // Поля совместимости на верхнем уровне, чтобы фронт сразу увидел file_path
+                'file_path' => $metadata['file_path'] ?? $imageData['url'],
+                'file_name' => $metadata['file_name'] ?? $imageData['filename'],
+                'file_size' => $metadata['file_size'] ?? $imageData['size']
             ]);
 
             // Публикуем сообщение в Redis для SSE
@@ -196,6 +204,15 @@ class MessageProcessor implements MessageProcessorInterface
         try {
             // Создаем сообщение с аудио (пока что без специального сервиса)
             $messageContent = !empty($caption) ? $caption : 'Аудио сообщение';
+            
+            // Извлекаем имя файла из URL
+            $fileName = 'audio.mp3';
+            if (strpos($audioUrl, 'filename=') !== false) {
+                parse_str(parse_url($audioUrl, PHP_URL_QUERY), $params);
+                if (!empty($params['filename'])) {
+                    $fileName = $params['filename'];
+                }
+            }
 
             $message = Message::create([
                 'chat_id' => $chat->id,
@@ -207,8 +224,12 @@ class MessageProcessor implements MessageProcessorInterface
                     'audio_url' => $audioUrl,
                     'original_url' => $audioUrl,
                     'caption' => $caption,
-                    'client_name' => $client->id,
-                    'direction' => 'incoming'
+                    'client_id' => $client->id,
+                    'client_name' => $client->name,
+                    'direction' => 'incoming',
+                    // Поля совместимости фронтенда
+                    'file_path' => $audioUrl,
+                    'file_name' => $fileName
                 ]
             ]);
 
@@ -300,8 +321,12 @@ class MessageProcessor implements MessageProcessorInterface
                     'document_name' => $documentName,
                     'original_url' => $documentUrl,
                     'caption' => $caption,
-                    'client_name' => $client->id,
-                    'direction' => 'incoming'
+                    'client_id' => $client->id,
+                    'client_name' => $client->name,
+                    'direction' => 'incoming',
+                    // Поля совместимости фронтенда
+                    'file_path' => $documentUrl,
+                    'file_name' => $documentName
                 ]
             ]);
 
@@ -383,12 +408,12 @@ class MessageProcessor implements MessageProcessorInterface
     public function sendMessage(Chat $chat, string $message): void
     {
         try {
-            // Сохраняем в базу как системное сообщение с временной меткой на 100 миллисекунд позже
-            // Получаем время последнего сообщения и добавляем 100ms для правильного порядка
+            // Сохраняем в базу как системное сообщение с временной меткой на 1 секунду позже
+            // Получаем время последнего сообщения и добавляем 1000ms для правильного порядка
             $lastMessage = Message::where('chat_id', $chat->id)->orderBy('created_at', 'desc')->first();
             $systemMessageTime = $lastMessage ?
-                $lastMessage->created_at->addMilliseconds(200) :
-                now()->addMilliseconds(200);
+                $lastMessage->created_at->addMilliseconds(1000) :
+                now()->addMilliseconds(1000);
 
             // Создаем сообщение с точным временем через DB::table для обхода автоматических timestamps
             $messageId = DB::table('messages')->insertGetId([
@@ -524,20 +549,35 @@ class MessageProcessor implements MessageProcessorInterface
     {
         try {
             $redis = app('redis');
-            $channel = "chat:{$chatId}";
+
+            // Единый формат события, совместимый с фронтендом (используется и в MessageService)
             $data = [
-                'type' => 'message',
+                'type' => 'new_message',
+                'chatId' => (string)$chatId,
                 'message' => [
                     'id' => $message->id,
+                    'message' => $message->content,
                     'content' => $message->content,
                     'type' => $message->type,
-                    'is_from_client' => $message->is_from_client,
+                    'is_from_client' => (bool)$message->is_from_client,
+                    'is_read' => (bool)($message->is_read ?? false),
+                    'read_at' => $message->read_at ? $message->read_at->toISOString() : null,
+                    // Вытаскиваем file_* на верх для фронта
+                    'file_path' => $message->file_path ?? ($message->metadata['file_path'] ?? null),
+                    'file_name' => $message->file_name ?? ($message->metadata['file_name'] ?? null),
+                    'file_size' => $message->file_size ?? ($message->metadata['file_size'] ?? null),
                     'created_at' => $message->created_at->toISOString(),
-                    'metadata' => $message->metadata
-                ]
+                    'metadata' => $message->metadata,
+                ],
+                'timestamp' => now()->toISOString(),
             ];
-            
-            $redis->publish($channel, json_encode($data));
+
+            // Публикуем в Pub/Sub (если где-то используется)
+            $redis->publish("chat:{$chatId}", json_encode($data));
+
+            // Обязательная запись в очередь SSE, которую читает ChatStreamController
+            $redis->lpush("sse_queue:chat.{$chatId}", json_encode($data));
+            $redis->expire("sse_queue:chat.{$chatId}", 3600);
         } catch (\Exception $e) {
             Log::error('Failed to publish message to Redis', [
                 'chat_id' => $chatId,

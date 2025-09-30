@@ -28,15 +28,21 @@ class MessengerServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Регистрируем SystemMessageService как singleton
+        $this->app->singleton(\App\Services\SystemMessageService::class);
+        
         // Регистрируем MessageProcessor как singleton
         $this->app->singleton(MessageProcessorInterface::class, MessageProcessor::class);
         
         // Регистрируем ClientManager как singleton
         $this->app->singleton(ClientManagerInterface::class, ClientManager::class);
         
-        // Регистрируем ChatStateManager с зависимостью от MessageProcessor
+        // Регистрируем ChatStateManager с зависимостями
         $this->app->singleton(ChatStateManagerInterface::class, function ($app) {
-            return new ChatStateManager($app->make(MessageProcessorInterface::class));
+            return new ChatStateManager(
+                $app->make(MessageProcessorInterface::class),
+                $app->make(\App\Services\SystemMessageService::class)
+            );
         });
 
         // Регистрируем Webhook сервисы

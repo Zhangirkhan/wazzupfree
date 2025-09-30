@@ -38,8 +38,15 @@ class MessengerService
             ]);
 
             // Находим или создаем клиента с контактами
+            // Нормализуем имя: если contactData.name пусто — используем телефон как временное имя
+            if (is_array($contactData)) {
+                $name = trim((string)($contactData['name'] ?? ''));
+                if ($name === '' || str_starts_with($name, 'Клиент ')) {
+                    $contactData['name'] = $contactData['name'] ?? '';
+                }
+            }
             $client = $this->clientManager->findOrCreateClient($phone, $contactData);
-            Log::info('Client found', ['client_id' => $client->id]);
+            Log::info('Client found', ['client_id' => $client->id, 'client_name' => $client->name]);
 
             // Находим или создаем чат
             $chat = $this->clientManager->findOrCreateMessengerChat($phone, $client, $organization);
@@ -776,13 +783,84 @@ class MessengerService
     {
         $chat = Chat::find($chatId);
         if (!$chat) {
-            return false;
+            return ['success' => false, 'error' => 'Chat not found'];
         }
 
+        // Обновляем статус чата
         $chat->update([
             'messenger_status' => 'closed',
+            'status' => 'closed', // Для основного статуса чата
             'last_activity_at' => now()
         ]);
+
+        // Отправляем сообщение клиенту о закрытии чата напрямую через Wazzup
+        $clientMessage = "Ваш чат был закрыт.\nДля восстановления общение с менеджером нажмите 1\nдля возврата в главное меню нажмите 0";
+        
+        // Получаем менеджера для отображения имени
+        $manager = User::find($managerId);
+        $managerName = $manager ? $manager->name : 'Менеджер';
+        
+        // Сохраняем сообщение администратора в базу ПЕРЕД отправкой
+        $messageRecord = Message::create([
+            'chat_id' => $chat->id,
+            'user_id' => $managerId,
+            'content' => $clientMessage,
+            'type' => 'text',
+            'direction' => 'out',
+            'metadata' => [
+                'direction' => 'outgoing',
+                'is_manager_message' => true,
+                'manager_name' => $managerName,
+                'is_closure_message' => true
+            ]
+        ]);
+        
+        if (class_exists('\App\Services\Wazzup24Service') && $chat->messenger_phone) {
+            try {
+                $wazzupService = app('\App\Services\Wazzup24Service');
+                
+                // Получаем данные для отправки
+                $channelId = config('services.wazzup24.channel_id');
+                $chatType = 'whatsapp';
+                $chatIdWazzup = $chat->messenger_phone;
+
+                $result = $wazzupService->sendMessage(
+                    $channelId,
+                    $chatType,
+                    $chatIdWazzup,
+                    $clientMessage,
+                    $managerId,
+                    $messageRecord->id
+                );
+
+                if ($result['success']) {
+                    // Обновляем сообщение с ID от Wazzup24
+                    $messageRecord->update([
+                        'wazzup_message_id' => $result['message_id'] ?? null,
+                        'metadata' => array_merge($messageRecord->metadata ?? [], [
+                            'wazzup_sent' => true,
+                            'wazzup_message_id' => $result['message_id'] ?? null
+                        ])
+                    ]);
+                    
+                    Log::info('Closure message sent to client via Wazzup24', [
+                        'chat_id' => $chatId,
+                        'wazzup_id' => $result['message_id'] ?? null,
+                        'message_id' => $messageRecord->id
+                    ]);
+                } else {
+                    Log::error('Failed to send closure message via Wazzup24', [
+                        'chat_id' => $chatId,
+                        'error' => $result['error'] ?? 'Unknown error'
+                    ]);
+                }
+            } catch (\Exception $e) {
+                Log::error('Exception sending closure message via Wazzup24', [
+                    'chat_id' => $chatId,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
 
         // Сохраняем системное сообщение о закрытии
         Message::create([
@@ -796,7 +874,13 @@ class MessengerService
             ]
         ]);
 
-        return true;
+        Log::info('Chat closed by manager', [
+            'chat_id' => $chatId,
+            'manager_id' => $managerId,
+            'reason' => $reason
+        ]);
+
+        return ['success' => true, 'message' => 'Chat closed successfully'];
     }
 
     /**

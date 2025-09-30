@@ -127,6 +127,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
         Route::post('/', [ChatApiController::class, 'store']);
         Route::get('/search', [ChatApiController::class, 'search']);
         Route::get('/{id}', [ChatApiController::class, 'show']);
+        Route::delete('/{id}', [ChatApiController::class, 'destroy']);
         Route::post('/{chatId}/send', [ChatApiController::class, 'sendMessage'])->middleware('throttle:120,1');
         Route::get('/{chatId}/messages', [ChatApiController::class, 'getMessages']);
         Route::post('/{chatId}/end', [ChatApiController::class, 'endChat']);
@@ -183,6 +184,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
             Route::post('/test-connection', [OrganizationWazzupController::class, 'testConnection']);
             Route::get('/channels', [OrganizationWazzupController::class, 'getChannels']);
             Route::post('/setup-webhooks', [OrganizationWazzupController::class, 'setupWebhooks']);
+            Route::get('/webhooks-status', [OrganizationWazzupController::class, 'webhooksStatus']);
             Route::get('/clients', [OrganizationWazzupController::class, 'getClients']);
             Route::post('/send-message', [OrganizationWazzupController::class, 'sendMessage']);
         });
@@ -327,7 +329,7 @@ Route::middleware(['auth:sanctum', 'throttle:60,1'])->group(function () {
 
 // Webhook routes (без аутентификации)
 Route::prefix('webhooks')->group(function () {
-    Route::match(['GET', 'POST'], '/wazzup24', [WebhookController::class, 'wazzup24']);
-    Route::match(['GET', 'POST'], '/organization/{organization}', [WebhookController::class, 'organizationWebhook'])->name('webhooks.organization');
+    Route::match(['GET', 'POST', 'HEAD', 'OPTIONS'], '/wazzup24', [WebhookController::class, 'wazzup24']);
+    Route::match(['GET', 'POST', 'HEAD', 'OPTIONS'], '/organization/{organization}', [WebhookController::class, 'organizationWebhook'])->name('webhooks.organization');
 });
 

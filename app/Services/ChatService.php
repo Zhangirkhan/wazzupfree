@@ -24,12 +24,12 @@ class ChatService implements ChatServiceInterface
 
     public function getUserChats(User $user, int $perPage = 20): LengthAwarePaginator
     {
-        // Администратор видит все чаты
+        // Администратор видит все чаты, включая закрытые
         if ($user->role === 'admin') {
-            return $this->chatRepository->getAll($perPage);
+            return $this->chatRepository->getAllIncludingClosed($perPage);
         }
 
-        // Обычные пользователи видят только свои чаты
+        // Обычные пользователи видят только свои активные чаты
         return $this->chatRepository->getByUser($user->id, $perPage);
     }
 
@@ -66,9 +66,9 @@ class ChatService implements ChatServiceInterface
             ]);
 
             // Отправляем событие о создании чата через Redis
-            $this->broadcastChatEvent('chat_created', $chat->load(['creator', 'assignedTo', 'messages']));
+            $this->broadcastChatEvent('chat_created', $chat->load(['creator', 'assignedTo', 'lastMessage.user']));
 
-            return $chat->load(['creator', 'assignedTo', 'messages']);
+            return $chat->load(['creator', 'assignedTo', 'lastMessage.user']);
         });
     }
 
@@ -154,6 +154,9 @@ class ChatService implements ChatServiceInterface
 
         Log::info('Chat soft deleted', ['chat_id' => $chatId, 'user_id' => $user->id]);
 
+        // Отправляем событие об удалении чата через SSE
+        $this->broadcastChatDeletedEvent($chat, $user);
+
         return true;
     }
 
@@ -170,6 +173,44 @@ class ChatService implements ChatServiceInterface
         Log::info('Chat restored', ['chat_id' => $chatId, 'user_id' => $user->id]);
 
         return $chat->load(['creator', 'assignedTo']);
+    }
+
+    /**
+     * Отправляем событие об удалении чата через Redis для SSE
+     */
+    private function broadcastChatDeletedEvent(Chat $chat, User $user): void
+    {
+        try {
+            $eventData = [
+                'type' => 'chat_deleted',
+                'chat_id' => $chat->id,
+                'deleted_by' => $user->id,
+                'timestamp' => now()->toISOString()
+            ];
+
+            // Отправляем событие в глобальный канал чатов
+            Redis::lpush('sse_queue:chats.global', json_encode($eventData));
+
+            // Отправляем событие в канал организации
+            if ($chat->organization_id) {
+                Redis::lpush("sse_queue:organization.{$chat->organization_id}.chats", json_encode($eventData));
+            }
+
+            // Отправляем событие в персональный канал пользователя
+            Redis::lpush("sse_queue:user.{$user->id}.chats", json_encode($eventData));
+
+            Log::info('Chat deleted event broadcasted', [
+                'chat_id' => $chat->id,
+                'user_id' => $user->id,
+                'organization_id' => $chat->organization_id
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to broadcast chat deleted event', [
+                'error' => $e->getMessage(),
+                'chat_id' => $chat->id,
+                'user_id' => $user->id
+            ]);
+        }
     }
 
     /**
@@ -190,15 +231,15 @@ class ChatService implements ChatServiceInterface
                     'created_at' => $chat->created_at?->toISOString(),
                     'updated_at' => $chat->updated_at?->toISOString(),
                     'unread_count' => 0,
-                    'last_message' => $chat->messages->first() ? [
-                        'id' => $chat->messages->first()->id,
-                        'message' => $chat->messages->first()->content,
-                        'type' => $chat->messages->first()->type,
-                        'created_at' => $chat->messages->first()->created_at?->toISOString(),
+                    'last_message' => $chat->lastMessage ? [
+                        'id' => $chat->lastMessage->id,
+                        'message' => $chat->lastMessage->content,
+                        'type' => $chat->lastMessage->type,
+                        'created_at' => $chat->lastMessage->created_at?->toISOString(),
                         'user' => [
-                            'id' => $chat->messages->first()->user_id,
-                            'name' => $chat->creator?->name ?? 'Система',
-                            'email' => $chat->creator?->email ?? '',
+                            'id' => $chat->lastMessage->user_id,
+                            'name' => $chat->lastMessage->user?->name ?? 'Система',
+                            'email' => $chat->lastMessage->user?->email ?? '',
                             'role' => 'user',
                             'permissions' => [],
                             'roles' => [],
@@ -209,8 +250,8 @@ class ChatService implements ChatServiceInterface
                             'updated_at' => '',
                             'status' => 'active'
                         ],
-                        'is_from_client' => false,
-                        'is_read' => false
+                        'is_from_client' => $chat->lastMessage->is_from_client ?? false,
+                        'is_read' => $chat->lastMessage->is_read ?? false
                     ] : null,
                     'user' => [
                         'id' => $chat->creator?->id,
